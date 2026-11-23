@@ -1,0 +1,84 @@
+{
+  "verification": {
+    "avg_steps": {
+      "mean": 5.2,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "avg_tokens": {
+      "mean": 13183.1,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:aggregation": {
+      "mean": 100.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:filtering": {
+      "mean": 100.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:time comparison": {
+      "mean": 100.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "correct_refusal_rate": {
+      "mean": null,
+      "std": 0.0,
+      "n_repeats": 0
+    },
+    "cost_per_question": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "crash_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:easy": {
+      "mean": 100.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:medium": {
+      "mean": 100.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "error_recovery_rate": {
+      "mean": 100.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "p50_latency_s": {
+      "mean": 25.968,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "p95_latency_s": {
+      "mean": 37.797,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "success_answerable": {
+      "mean": 100.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "success_completed": {
+      "mean": 100.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "success_rate": {
+      "mean": 100.0,
+      "std": 0.0,
+      "n_repeats": 1
+    }
+  }
+}

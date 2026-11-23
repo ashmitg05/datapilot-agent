@@ -42,7 +42,20 @@ def norm(v: Any) -> Any:
     return s
 
 
+_MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august",
+           "september", "october", "november", "december"]  # fmt: skip
+
+
+def _month_only(v: Any) -> int | None:
+    """'November' / 'nov' -> 11. Only a bare month name (the question fixed the year)."""
+    s = str(v).strip().lower()
+    return next((i + 1 for i, m in enumerate(_MONTHS) if s in (m, m[:3])), None)
+
+
 def same(a: Any, b: Any) -> bool:
+    for gold, got in ((a, b), (b, a)):
+        if isinstance(gold, str) and re.fullmatch(r"\d{4}-\d{2}", gold) and _month_only(got):
+            return int(gold[5:]) == _month_only(got)
     a, b = norm(a), norm(b)
     if isinstance(a, float) and isinstance(b, float):
         return math.isclose(a, b, rel_tol=REL_TOL, abs_tol=ABS_TOL)
@@ -54,7 +67,9 @@ def same(a: Any, b: Any) -> bool:
 
 
 def _row_eq(g: list[Any], r: list[Any]) -> bool:
-    return len(g) == len(r) and all(same(a, b) for a, b in zip(g, r, strict=True))
+    """Gold cells must appear in the row in order; extra supporting columns are allowed."""
+    cells = iter(r)
+    return all(any(same(a, b) for b in cells) for a in g)
 
 
 def _as_list(v: Any) -> list[Any]:
@@ -76,7 +91,8 @@ def match_value(answer_type: str, gold: Any, value: Any) -> bool:
         got: list[Any] = _as_list(value)
         if len(got) == 1 and isinstance(got[0], list):  # [[x]] from a 1-col table
             got = got[0]
-        got = [g[0] if isinstance(g, list) and len(g) == 1 else g for g in got]
+        # A list answer given as rows ([name, metric]) is judged on its first column.
+        got = [g[0] if isinstance(g, list) and g else g for g in got]
         return len(got) == len(gold) and all(any(same(g, v) for v in got) for g in gold)
     # table: order-insensitive row match, cell-wise tolerance
     rows = [_as_list(r) for r in _as_list(value)]

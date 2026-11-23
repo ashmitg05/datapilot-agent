@@ -1,0 +1,512 @@
+{
+  "single_shot": {
+    "avg_steps": {
+      "mean": 1.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "avg_tokens": {
+      "mean": 92.69565217391305,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:aggregation": {
+      "mean": 94.73684210526316,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:ambiguous": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:filtering": {
+      "mean": 91.66666666666667,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:multi-step reasoning": {
+      "mean": 63.63636363636363,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:time comparison": {
+      "mean": 50.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:unanswerable": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "correct_refusal_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "cost_per_question": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "crash_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:easy": {
+      "mean": 76.92307692307692,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:hard": {
+      "mean": 53.84615384615385,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:medium": {
+      "mean": 50.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "error_recovery_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "p50_latency_s": {
+      "mean": 8.828,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "p95_latency_s": {
+      "mean": 32.515,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "success_answerable": {
+      "mean": 68.85245901639344,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "success_completed": {
+      "mean": 60.869565217391305,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "success_rate": {
+      "mean": 60.869565217391305,
+      "std": 0.0,
+      "n_repeats": 1
+    }
+  },
+  "loop_no_schema": {
+    "avg_steps": {
+      "mean": 1.5942028985507246,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "avg_tokens": {
+      "mean": 2083.68115942029,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:aggregation": {
+      "mean": 63.1578947368421,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:ambiguous": {
+      "mean": 28.571428571428573,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:filtering": {
+      "mean": 25.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:multi-step reasoning": {
+      "mean": 9.090909090909092,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:time comparison": {
+      "mean": 58.333333333333336,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:unanswerable": {
+      "mean": 12.5,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "correct_refusal_rate": {
+      "mean": 12.5,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "cost_per_question": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "crash_rate": {
+      "mean": 43.47826086956522,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:easy": {
+      "mean": 42.30769230769231,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:hard": {
+      "mean": 15.384615384615385,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:medium": {
+      "mean": 43.333333333333336,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "error_recovery_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "p50_latency_s": {
+      "mean": 16.11,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "p95_latency_s": {
+      "mean": 76.391,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "success_answerable": {
+      "mean": 40.98360655737705,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "success_completed": {
+      "mean": 66.66666666666667,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "success_rate": {
+      "mean": 37.68115942028985,
+      "std": 0.0,
+      "n_repeats": 1
+    }
+  },
+  "loop_schema": {
+    "avg_steps": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "avg_tokens": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:aggregation": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:ambiguous": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:filtering": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:multi-step reasoning": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:time comparison": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:unanswerable": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "correct_refusal_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "cost_per_question": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "crash_rate": {
+      "mean": 100.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:easy": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:hard": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:medium": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "error_recovery_rate": {
+      "mean": null,
+      "std": 0.0,
+      "n_repeats": 0
+    },
+    "p50_latency_s": {
+      "mean": 15.609,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "p95_latency_s": {
+      "mean": 17.281,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "success_answerable": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "success_completed": {
+      "mean": null,
+      "std": 0.0,
+      "n_repeats": 0
+    },
+    "success_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    }
+  },
+  "self_correction": {
+    "avg_steps": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "avg_tokens": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:aggregation": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:ambiguous": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:filtering": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:multi-step reasoning": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:time comparison": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:unanswerable": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "correct_refusal_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "cost_per_question": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "crash_rate": {
+      "mean": 100.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:easy": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:hard": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:medium": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "error_recovery_rate": {
+      "mean": null,
+      "std": 0.0,
+      "n_repeats": 0
+    },
+    "p50_latency_s": {
+      "mean": 15.766,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "p95_latency_s": {
+      "mean": 16.891,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "success_answerable": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "success_completed": {
+      "mean": null,
+      "std": 0.0,
+      "n_repeats": 0
+    },
+    "success_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    }
+  },
+  "verification": {
+    "avg_steps": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "avg_tokens": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:aggregation": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:ambiguous": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:filtering": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:multi-step reasoning": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:time comparison": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "category:unanswerable": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "correct_refusal_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "cost_per_question": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "crash_rate": {
+      "mean": 100.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:easy": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:hard": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "difficulty:medium": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "error_recovery_rate": {
+      "mean": null,
+      "std": 0.0,
+      "n_repeats": 0
+    },
+    "p50_latency_s": {
+      "mean": 15.485,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "p95_latency_s": {
+      "mean": 17.375,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "success_answerable": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    },
+    "success_completed": {
+      "mean": null,
+      "std": 0.0,
+      "n_repeats": 0
+    },
+    "success_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "n_repeats": 1
+    }
+  }
+}

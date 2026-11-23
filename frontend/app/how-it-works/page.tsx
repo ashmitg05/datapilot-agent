@@ -71,6 +71,12 @@ export default function HowItWorks() {
           </p>
         )}
         {summary && (
+          <p className="text-sm text-zinc-500">
+            Pilot ablation: 10 retail questions × 5 configs, gemini-3.5-flash-lite, SQL-only,
+            1 repeat. The full 69-question run is in progress; see the README for details.
+          </p>
+        )}
+        {summary && (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>

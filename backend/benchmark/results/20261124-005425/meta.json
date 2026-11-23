@@ -1,0 +1,32 @@
+{
+  "run_id": "20261124-005425",
+  "configs": {
+    "verification": {
+      "schema_inspection": true,
+      "self_correction": true,
+      "verification": true,
+      "allow_python": true,
+      "max_steps": 10,
+      "max_retries": 3,
+      "cost_cap_usd": null
+    }
+  },
+  "models": {
+    "verification": "nvidia/nemotron-3-ultra-550b-a55b:free"
+  },
+  "repeats": 1,
+  "questions": [
+    "r01",
+    "r02",
+    "r03",
+    "r04",
+    "r05",
+    "r06",
+    "r07",
+    "r08",
+    "r09",
+    "r10"
+  ],
+  "sql_only": true,
+  "provider": "openai"
+}

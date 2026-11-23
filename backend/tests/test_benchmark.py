@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from app.llm import LLMResponse, Pricing, ScriptedClient, ToolCall
 from app.tools import ToolContext
 from app.tools.sql import Database
@@ -47,3 +49,37 @@ def test_provider_crash_is_recorded(db: Database, tmp_path: Path) -> None:
     row = run_one(Q, GOLD, "self_correction", 0, Boom([]), Pricing(), ToolContext(db),
                   TraceStore(tmp_path / "t.sqlite3"))  # fmt: skip
     assert row["status"] == "crashed" and "rate limited" in row["crash"] and not row["correct"]
+
+
+def test_resume_reruns_only_provider_errors(
+    data_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sys
+
+    from benchmark import run
+
+    q2 = {**Q, "id": "t2"}
+    monkeypatch.setattr(run, "DATA", data_dir.parent)
+    qs = [{**Q, "dataset": data_dir.name}, {**q2, "dataset": data_dir.name}]
+    monkeypatch.setattr(run, "load_questions", lambda: qs)
+    gold = tmp_path / "bench"
+    gold.mkdir()
+    gold_rows = [GOLD, {**GOLD, "id": "t2"}]
+    (gold / "gold.jsonl").write_text("\n".join(json.dumps(g) for g in gold_rows))
+    monkeypatch.setattr(run, "ROOT", gold)
+    monkeypatch.setenv("LLM_MODEL", "scripted")
+    monkeypatch.setattr(run, "from_env", lambda m=None: ScriptedClient([_final("East")] * 5))
+    d = tmp_path / "prev"
+    d.mkdir()
+    (d / "meta.json").write_text(json.dumps(
+        {"configs": {"self_correction": {}}, "repeats": 1, "questions": ["t1", "t2"],
+         "sql_only": True}))  # fmt: skip
+    done = {"config": "self_correction", "question_id": "t1", "repeat": 0, "correct": True,
+            "crash": None}  # fmt: skip
+    crashed = {**done, "question_id": "t2", "correct": False, "crash": "RateLimitError"}
+    (d / "raw.jsonl").write_text(json.dumps(done) + "\n" + json.dumps(crashed) + "\n")
+    monkeypatch.setattr(sys, "argv", ["run", "--resume", str(d), "--workers", "1"])
+    run.main()
+    rows = [json.loads(x) for x in (d / "raw.jsonl").read_text().splitlines()]
+    assert sorted((r["question_id"], r["correct"]) for r in rows) == [("t1", True), ("t2", True)]
+    assert all(not r["crash"] for r in rows)

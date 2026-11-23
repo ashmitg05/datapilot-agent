@@ -22,6 +22,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
 from app.agent.loop import run_agent, single_shot
@@ -103,7 +104,21 @@ def main() -> None:
     p.add_argument("--ids", default=None, help="comma-separated question ids")
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--sql-only", action="store_true", help="disable run_python (no Docker)")
+    p.add_argument(
+        "--resume",
+        type=Path,
+        default=None,
+        help="existing run dir: keep finished rows, re-run missing ones and provider errors "
+        "(for free tiers with a daily quota). Configs, questions and repeats come from it.",
+    )
     a = p.parse_args()
+    kept: list[dict[str, Any]] = []
+    if a.resume:
+        meta = json.loads((a.resume / "meta.json").read_text())
+        a.configs, a.repeats = ",".join(meta["configs"]), meta["repeats"]
+        a.ids, a.limit, a.sql_only = ",".join(meta["questions"]), None, meta["sql_only"]
+        rows = [json.loads(x) for x in (a.resume / "raw.jsonl").read_text().splitlines() if x]
+        kept = [r for r in rows if not r.get("crash")]
 
     questions = load_questions()
     if a.ids:
@@ -115,11 +130,17 @@ def main() -> None:
         raise SystemExit("benchmark/gold.jsonl missing: run `python -m benchmark.gold` first.")
     gold = {g["id"]: g for g in map(json.loads, gold_path.read_text().splitlines())}
 
-    run_id = time.strftime("%Y%m%d-%H%M%S")
-    out = ROOT / "results" / run_id
-    out.mkdir(parents=True)
     configs = a.configs.split(",")
-    (out / "meta.json").write_text(json.dumps({
+    if a.resume:
+        out, run_id = a.resume, a.resume.name
+        (out / "raw.jsonl").write_text("".join(json.dumps(r, default=str) + "\n" for r in kept))
+    else:
+        run_id = time.strftime("%Y%m%d-%H%M%S")
+        out = ROOT / "results" / run_id
+        out.mkdir(parents=True)
+    finished = {(r["config"], r["question_id"], r["repeat"]) for r in kept}
+    if not a.resume:
+        (out / "meta.json").write_text(json.dumps({
         "run_id": run_id, "configs": {c: asdict(cfg) if (cfg := CONFIGS[c]) else None
                                        for c in configs},
         "models": {c: _model_for(c)[0] for c in configs}, "repeats": a.repeats,
@@ -132,12 +153,17 @@ def main() -> None:
     lock = threading.Lock()
     raw = (out / "raw.jsonl").open("a")
     done = 0
-    total = len(configs) * a.repeats * len(questions)
+    total = len(configs) * a.repeats * len(questions) - len(finished)
 
     for config_name in configs:
         model, prefix = _model_for(config_name)
         llm, pricing = from_env(model), Pricing.from_env(prefix)
-        jobs = [(q, r) for r in range(a.repeats) for q in questions]
+        jobs = [
+            (q, r)
+            for r in range(a.repeats)
+            for q in questions
+            if (config_name, q["id"], r) not in finished
+        ]
 
         def work(job: tuple[dict[str, Any], int]) -> None:
             nonlocal done

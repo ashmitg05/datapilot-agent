@@ -35,8 +35,12 @@ def repeat_metrics(rows: list[Row]) -> dict[str, float | None]:
     answerable = [r for r in rows if r["category"] != "unanswerable"]
     unanswerable = [r for r in rows if r["category"] == "unanswerable"]
     errors = sum(r["errors"] for r in rows)
+    completed = [r for r in rows if not r.get("crash")]
     m: dict[str, float | None] = {
         "success_rate": _pct([r["correct"] for r in rows]),
+        # Provider errors (429/503 after retries) are not agent mistakes: report them apart.
+        "crash_rate": _pct([bool(r.get("crash")) for r in rows]),
+        "success_completed": _pct([r["correct"] for r in completed]),
         "success_answerable": _pct([r["correct"] for r in answerable]),
         "correct_refusal_rate": _pct([r["correct"] for r in unanswerable]),
         "avg_steps": statistics.fmean(r["steps"] for r in rows),
@@ -91,14 +95,16 @@ def markdown(agg: dict[str, Any], meta: dict[str, Any], n_questions: int) -> str
         f"provider {meta['provider']} · models {meta['models']}"
         + (" · SQL-only" if meta.get("sql_only") else ""),
         "",
-        "| Config | Success % | Correct refusal % | Avg steps | Avg tokens | Cost / q | "
-        "p50 s | p95 s | Error recovery % |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| Config | Success % | Success % (excl. provider errors) | Provider errors % | "
+        "Correct refusal % | Avg steps | Avg tokens | Cost / q | p50 s | p95 s | "
+        "Error recovery % |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for c in order:
         m = agg[c]
         lines.append(
-            f"| {c} | {_fmt(m['success_rate'])} | {_fmt(m['correct_refusal_rate'])} | "
+            f"| {c} | {_fmt(m['success_rate'])} | {_fmt(m['success_completed'])} | "
+            f"{_fmt(m['crash_rate'])} | {_fmt(m['correct_refusal_rate'])} | "
             f"{_fmt(m['avg_steps'])} | {_fmt(m['avg_tokens'], 0)} | "
             f"{_fmt(m['cost_per_question'], money=True)} | {_fmt(m['p50_latency_s'])} | "
             f"{_fmt(m['p95_latency_s'])} | {_fmt(m['error_recovery_rate'])} |"

@@ -54,25 +54,127 @@ There are 69 questions across 3 public datasets
 
 ### Ablation results
 
-> **No benchmark run yet.** This table is filled from `benchmark/results/<run_id>/summary.md`.
-> Every number here must trace back to a saved run.
+**Status: partial.** All runs so far use Gemini's free tier, which allows 15 requests per
+minute and 500 requests per day for `gemini-3.5-flash-lite`. That's enough for the pilot
+and about half of one full repeat. The 3-repeat run on all 69 questions is still to do (see
+"Finishing the benchmark" below). Every number here comes from a saved run under
+`backend/benchmark/results/` (`raw.jsonl`, `summary.md`, `traces.sqlite3`). Cost shows as $0
+because the free tier is free, not because cost wasn't measured.
 
-| Config | Success % | Correct refusal % | Avg steps | Avg tokens | Cost / q | p50 s | p95 s |
-|---|---|---|---|---|---|---|---|
-| single_shot | – | – | – | – | – | – | – |
-| loop_no_schema | – | – | – | – | – | – | – |
-| loop_schema | – | – | – | – | – | – | – |
-| self_correction | – | – | – | – | – | – | – |
-| verification | – | – | – | – | – | – | – |
-| verification_cheap | – | – | – | – | – | – | – |
+**1. Pilot ablation:** 10 questions (`r01`–`r10`, retail) × 5 configs × 1 repeat on
+`gemini-3.5-flash-lite`, SQL-only. Run `20261124-002455`.
 
-Each config is run 3 times and reported as mean ± std. The breakdowns by difficulty and by
-category are in `summary.md`.
+| Config | Success % | Success % excl. provider errors | Avg steps | Avg tokens | p50 s |
+|---|---|---|---|---|---|
+| single_shot | 90 | 90 | 1.0 | 71 | 6.5 |
+| loop_no_schema | 60 | 60 | 2.5 | 2,976 | 5.7 |
+| loop_schema | 100 | 100 | 3.3 | 5,580 | 23.0 |
+| self_correction | 100 | 100 | 3.4 | 5,796 | 25.0 |
+| verification | 80 | 100 | 4.3 | 8,204 | 41.4 |
+
+![Pilot ablation success rate](backend/benchmark/results/20261124-002455/success.png)
+
+**2. Full question set:** 69 questions × 1 repeat, same model. Run `20261124-005158`.
+The daily quota ran out partway through config 2, so configs 3–5 have no results yet.
+
+| Config | Questions completed | Success % (completed) | Correct refusal % (unanswerable) |
+|---|---|---|---|
+| single_shot | 69 / 69 | 60.9 | 0.0 (0 of 8) |
+| loop_no_schema | 39 / 69 | 66.7 | 12.5 (1 of 8) |
+| loop_schema, self_correction, verification | 0 / 69 | pending | pending |
+
+On the 39 questions both configs finished, single_shot and loop_no_schema each got 26 right.
+
+**3. Stronger model:** the verification config on `nvidia/nemotron-3-ultra-550b-a55b:free`
+(OpenRouter), same 10 pilot questions. Run `20261124-005425`. It scored 10 / 10, with 5.2
+average steps and 13,183 average tokens, against flash-lite's 8 / 10 (both misses were
+provider errors). Ten questions is too few to rank the models.
+
+What the data shows so far:
+- **Schema inspection matters most.** On the pilot, adding `describe_schema` took the loop
+  from 60% to 100%. Without it, the agent tried to discover the schema by querying
+  `information_schema`, which the SQL guard blocks, and with self-correction off the first
+  rejection ended the run.
+- **Single-shot is strong on easy questions and weak everywhere else.** On the full set it
+  scores 94.7% on aggregation and 91.7% on filtering. It scores 0% on ambiguous and
+  unanswerable questions: it can't say "this column doesn't exist", and it never states an
+  interpretation.
+- **The pilot is too easy to separate the top three configs.** Questions r01–r10 are mostly
+  easy and medium retail questions. The full run on configs 3–5 is needed to show whether
+  self-correction and verification add accuracy, and what they cost in tokens.
+
+**Checker fixes after the first run.** Reading the traces found three false negatives in the
+answer checker:
+- A bare month name ("November") for a "which month of 2011" question.
+- A list answer given as `[name, revenue]` rows.
+- A table answer with an extra supporting column.
+
+The checker was fixed and tested, and every run was re-graded from its stored answers with
+`python -m benchmark.regrade`. That changed 5 verdicts, all from wrong to right. The
+original verdict is kept as `correct_at_run` in each `raw.jsonl`.
+
+#### Finishing the benchmark
+
+The runner resumes a run, keeping finished rows and retrying provider errors:
+
+```bash
+cd backend
+LLM_MODEL=gemini-3.5-flash-lite LLM_RPM=14 uv run python -m benchmark.run --resume benchmark/results/20261124-005158
+uv run python -m benchmark.report benchmark/results/20261124-005158
+```
+
+Each config costs about 70–300 requests per repeat, so on the free tier the remaining configs
+take 2–3 days. For 3 repeats, start a new run with `--repeats 3` and resume it daily, or use
+a paid key. A $10 OpenRouter credit also raises its free-model daily limit.
 
 ### Failure analysis
 
-_To be written from `failure_candidates.md` after the run: 5 cases, each with the trace, what
-went wrong, and the fix._
+Five real failures from the saved traces. Trace ids are in each run's `failure_candidates.md`
+and `traces.sqlite3`.
+
+1. **Guessed column names: single_shot, `r06`** ("top 3 countries by revenue, excluding the
+   UK").
+   - *What happened:* the model wrote `SUM(Quantity * UnitPrice)`, but the real columns are
+     `quantity` and `unit_price`. DuckDB raised a Binder Error and even listed
+     `retail.unit_price` as a candidate, but single-shot has no second turn to use that hint.
+   - *How common:* Binder errors from guessed or invented column names (`UnitPrice`,
+     `InvoiceDate`, `date_received`, `cost`) caused 19 of the 27 single-shot failures on the
+     full set: 11 on answerable questions and 8 on unanswerable ones.
+   - *Fix:* the `describe_schema` step, plus feeding the error back to the model, as
+     loop_schema and self_correction do.
+2. **Silently wrong because of NULLs: single_shot, `r11`** ("which customer ID has the
+   highest revenue").
+   - *What happened:* the query grouped by `customer_id` without excluding NULLs, so the
+     "customer" with the highest revenue was `NULL`, the 135,080 rows with no customer ID.
+     The SQL ran without error and returned a confident wrong answer.
+   - *Why it matters:* only schema inspection prevents this; null counts are part of its
+     output. Execution errors can't catch it.
+3. **Window function applied after the filter: single_shot, `b15`** ("7-day rolling average
+   on 2012-12-31").
+   - *What happened:* the model put `AVG(cnt) OVER (ROWS 6 PRECEDING)` in a query whose
+     `WHERE` had already filtered down to that single day. The window saw one row and returned
+     2,729, the day's own count, instead of 1,789.86.
+   - *Fix:* again a silent logic error. The verification step, which re-checks the number
+     with an independent query, is meant to catch exactly this class.
+4. **Tried to read the catalog and was blocked by the guard: loop_no_schema, `r01`.**
+   - *What happened:* with no schema tool, the agent ran
+     `SELECT * FROM information_schema.tables`. The SQL guard rejects any table not in the
+     dataset, by design: catalog and file access are part of what it blocks. With
+     self-correction off, that first rejection ended the run. This pattern caused 9 of the 13
+     loop_no_schema failures.
+   - *Trade-off:* allowing read-only catalog views would help this config, but would widen
+     the attack surface. The `describe_schema` tool gives the same information safely.
+5. **Invented tool arguments: loop_no_schema, `b18`.**
+   - *What happened:* the model called `run_sql` with `{"queries": [...]}`, a list, instead
+     of the required `{"query": "..."}`. Strict argument validation
+     (`extra="forbid"`) rejected the call, and with self-correction off the run ended.
+   - *Fix:* this is the case the self-correction hint is for. The validation error names the
+     missing field. A further option is constrained decoding or tool-schema examples in the
+     prompt.
+
+Every unanswerable question in the single-shot config failed: the model invented a column
+(`cost`, `sales_rep`, `trip_duration`, `disposition`) and the query errored. This is why
+the agent's `final_answer` has an `answerable` flag.
 
 ## Security design
 
@@ -117,6 +219,14 @@ CI builds the sandbox image and fails if any sandbox security test is skipped.
   memory up front. The fix was a 1 GiB address-space limit, single-threaded BLAS, and the
   service's own memory limit.
 - On Windows, the sandbox tests are flaky when host RAM is exhausted. CI runs them on Linux.
+- **Free-tier quotas shaped the benchmark more than the code did.**
+  - The `gemini-3.5-flash` alias allows 20 requests per day and `flash-lite` allows 500. A
+    3-repeat run of every config is about 3,000 requests.
+  - Fixes: a client-side requests-per-minute pacer (`LLM_RPM`), a separate column for
+    provider errors in the report, and `--resume` to finish a run across days.
+- **Gemini 3 thought signatures.** Gemini 3 rejects the next turn unless each tool call's
+  `thought_signature` is sent back. The provider-neutral message format now carries
+  provider extras on each tool call.
 - Next:
   - Postgres for traces
   - a shared rate limiter

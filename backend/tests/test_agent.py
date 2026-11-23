@@ -136,3 +136,14 @@ def test_load_env_does_not_override(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
     assert os.environ["DP_A"] == "from_file" and os.environ["DP_B"] == "quoted"
     assert os.environ["DP_C"] == "already_set"
+
+
+def test_pacer_spaces_calls() -> None:
+    import time
+
+    from app.llm import _Pacer
+
+    pacer, t0 = _Pacer(rpm=600), time.monotonic()  # 0.1 s apart
+    for _ in range(4):
+        pacer.wait()
+    assert time.monotonic() - t0 >= 0.29

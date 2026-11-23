@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -128,6 +130,28 @@ class AnthropicClient:
         return LLMResponse(text, calls, resp.usage.input_tokens, resp.usage.output_tokens)
 
 
+class _Pacer:
+    """Spaces calls to stay under a requests-per-minute quota (LLM_RPM; 0 = off).
+
+    ponytail: one lock per process, so one client's pace is shared by all threads; per-model
+    pacing if several models share a process.
+    """
+
+    def __init__(self, rpm: float) -> None:
+        self.interval = 60.0 / rpm if rpm > 0 else 0.0
+        self._next = 0.0
+        self._lock = threading.Lock()
+
+    def wait(self) -> None:
+        if not self.interval:
+            return
+        with self._lock:
+            now = time.monotonic()
+            start = max(now, self._next)
+            self._next = start + self.interval
+        time.sleep(max(0.0, start - now))
+
+
 class OpenAIClient:
     """Also works with any OpenAI-compatible endpoint via base_url (Gemini, Groq, vLLM...)."""
 
@@ -137,6 +161,7 @@ class OpenAIClient:
         self.model = model
         # Free tiers return 429/503 often; the SDK retries with backoff.
         self._client = openai.OpenAI(api_key=api_key, base_url=base_url, max_retries=5)
+        self._pacer = _Pacer(float(os.environ.get("LLM_RPM", "0") or 0))
 
     def complete(
         self, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
@@ -163,6 +188,7 @@ class OpenAIClient:
                     {"role": "tool", "tool_call_id": r["id"], "content": r["content"]}
                     for r in m["results"]
                 ]
+        self._pacer.wait()
         resp = self._client.chat.completions.create(
             model=self.model,
             messages=wire,  # type: ignore[arg-type]

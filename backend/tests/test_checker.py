@@ -21,12 +21,18 @@ from benchmark.gold import compute, load_questions
         ("list", ["A", "B", "C"], ["c", "a", "b"], True),
         ("list", ["A", "B", "C"], ["a", "b"], False),
         ("list", ["2011-11"], "November 2011", True),
+        ("list", ["2011-11"], "November", True),
+        ("list", ["2011-11"], "October", False),
         ("list", ["2012-09-15"], "2012-09-15", True),
         ("yes-no", True, "Yes", True),
         ("yes-no", True, False, False),
         ("table", [[14646, 279489.02]], [[14646.0, 279489.0]], True),
         ("table", [[1, 2.0], [2, 3.0]], [[2, 3.0], [1, 2.0]], True),
         ("table", [[1, 2.0]], [[1, 9.0]], False),
+        ("table", [[1, 4876.79]], [[1, 4876.786, 463]], True),
+        ("table", [[1, 4876.79]], [[463, 1]], False),
+        ("list", ["A", "B"], [["a", 10.0], ["b", 5.0]], True),
+        ("list", ["A", "B"], [["a", 10.0], ["c", 5.0]], False),
     ],
 )
 def test_match_value(answer_type: str, gold: object, value: object, ok: bool) -> None:

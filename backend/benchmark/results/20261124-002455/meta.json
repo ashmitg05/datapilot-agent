@@ -1,0 +1,64 @@
+{
+  "run_id": "20261124-002455",
+  "configs": {
+    "single_shot": null,
+    "loop_no_schema": {
+      "schema_inspection": false,
+      "self_correction": false,
+      "verification": false,
+      "allow_python": true,
+      "max_steps": 10,
+      "max_retries": 3,
+      "cost_cap_usd": null
+    },
+    "loop_schema": {
+      "schema_inspection": true,
+      "self_correction": false,
+      "verification": false,
+      "allow_python": true,
+      "max_steps": 10,
+      "max_retries": 3,
+      "cost_cap_usd": null
+    },
+    "self_correction": {
+      "schema_inspection": true,
+      "self_correction": true,
+      "verification": false,
+      "allow_python": true,
+      "max_steps": 10,
+      "max_retries": 3,
+      "cost_cap_usd": null
+    },
+    "verification": {
+      "schema_inspection": true,
+      "self_correction": true,
+      "verification": true,
+      "allow_python": true,
+      "max_steps": 10,
+      "max_retries": 3,
+      "cost_cap_usd": null
+    }
+  },
+  "models": {
+    "single_shot": "gemini-3.5-flash-lite",
+    "loop_no_schema": "gemini-3.5-flash-lite",
+    "loop_schema": "gemini-3.5-flash-lite",
+    "self_correction": "gemini-3.5-flash-lite",
+    "verification": "gemini-3.5-flash-lite"
+  },
+  "repeats": 1,
+  "questions": [
+    "r01",
+    "r02",
+    "r03",
+    "r04",
+    "r05",
+    "r06",
+    "r07",
+    "r08",
+    "r09",
+    "r10"
+  ],
+  "sql_only": true,
+  "provider": "openai"
+}
