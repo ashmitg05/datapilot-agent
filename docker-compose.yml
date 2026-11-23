@@ -1,0 +1,41 @@
+# Local dev: API + sandbox service + frontend. SQLite file for traces (Postgres not needed).
+# First: cd backend && uv run python -m benchmark.download
+services:
+  sandbox:
+    build: ./sandbox
+    entrypoint: ["python", "/app/server.py"]
+    environment: { PORT: "8080" }
+    read_only: true
+    tmpfs: ["/tmp:size=128m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 768m
+    cpus: 1
+    networks: [sandbox_net]   # internal network: no internet
+
+  api:
+    build: ./backend
+    env_file: .env
+    environment:
+      SANDBOX_MODE: http
+      SANDBOX_URL: http://sandbox:8080
+      CORS_ORIGINS: http://localhost:3000
+      DATABASE_PATH: /data/datapilot.sqlite3
+    volumes: ["traces:/data"]
+    ports: ["8000:8080"]
+    depends_on: [sandbox]
+    networks: [sandbox_net, default]
+
+  frontend:
+    build:
+      context: ./frontend
+      args: { NEXT_PUBLIC_API_URL: http://localhost:8000 }
+    ports: ["3000:3000"]
+    depends_on: [api]
+
+networks:
+  sandbox_net: { internal: true }
+
+volumes:
+  traces:

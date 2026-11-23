@@ -1,0 +1,69 @@
+{"id": "r01", "answerable": true, "values": [38]}
+{"id": "r02", "answerable": true, "values": [9747747.933999078]}
+{"id": "r03", "answerable": true, "values": [9495]}
+{"id": "r04", "answerable": true, "values": [["United Kingdom"]]}
+{"id": "r05", "answerable": true, "values": [3836]}
+{"id": "r06", "answerable": true, "values": [["Netherlands", "EIRE", "Germany"]]}
+{"id": "r07", "answerable": true, "values": [1461756.2500000016]}
+{"id": "r08", "answerable": true, "values": [["2011-11"]]}
+{"id": "r09", "answerable": true, "values": [20.923127413127414]}
+{"id": "r10", "answerable": true, "values": [4372]}
+{"id": "r11", "answerable": true, "values": [[[14646, 279489.01999999944]]]}
+{"id": "r12", "answerable": true, "values": [["Australia"]]}
+{"id": "r13", "answerable": true, "values": [9.941456699140819]}
+{"id": "r14", "answerable": true, "values": [36.522823796036654]}
+{"id": "r15", "answerable": true, "values": [10624]}
+{"id": "r16", "answerable": true, "values": [38970.0]}
+{"id": "r17", "answerable": true, "values": [413]}
+{"id": "r18", "answerable": true, "values": [8998790.91399901, 4834222]}
+{"id": "r19", "answerable": true, "values": [[14646], [14911]]}
+{"id": "r20", "answerable": false, "values": []}
+{"id": "r21", "answerable": false, "values": []}
+{"id": "r22", "answerable": true, "values": [true]}
+{"id": "r23", "answerable": true, "values": [376.36092409263074, 482.4401932559641, 17.98779487699805]}
+{"id": "b01", "answerable": true, "values": [3292679]}
+{"id": "b02", "answerable": true, "values": [731]}
+{"id": "b03", "answerable": true, "values": [8714]}
+{"id": "b04", "answerable": true, "values": [["2012-09-15"]]}
+{"id": "b05", "answerable": true, "values": [2049576]}
+{"id": "b06", "answerable": true, "values": [64.87579870694545]}
+{"id": "b07", "answerable": true, "values": [6]}
+{"id": "b08", "answerable": true, "values": [3735.0]}
+{"id": "b09", "answerable": true, "values": [18.830168382645255]}
+{"id": "b10", "answerable": true, "values": [94]}
+{"id": "b11", "answerable": true, "values": [[[1, 4876.7861771058315], [2, 4035.862348178138], [3, 1803.2857142857142]]]}
+{"id": "b12", "answerable": true, "values": [0.6274940090334915]}
+{"id": "b13", "answerable": true, "values": [3]}
+{"id": "b14", "answerable": true, "values": [29]}
+{"id": "b15", "answerable": true, "values": [1789.857142857143]}
+{"id": "b16", "answerable": true, "values": [true]}
+{"id": "b17", "answerable": true, "values": [254.65116883116843]}
+{"id": "b18", "answerable": true, "values": [2]}
+{"id": "b19", "answerable": true, "values": [1061129, 918589, 1042484]}
+{"id": "b20", "answerable": true, "values": [0.49538478850889184, 20.31077632886456]}
+{"id": "b21", "answerable": false, "values": []}
+{"id": "b22", "answerable": false, "values": []}
+{"id": "b23", "answerable": false, "values": []}
+{"id": "c01", "answerable": true, "values": [53060]}
+{"id": "c02", "answerable": true, "values": [["Illegal Parking"]]}
+{"id": "c03", "answerable": true, "values": [14]}
+{"id": "c04", "answerable": true, "values": [150]}
+{"id": "c05", "answerable": true, "values": [48]}
+{"id": "c06", "answerable": true, "values": [["BROOKLYN"]]}
+{"id": "c07", "answerable": true, "values": [99.15378816434226]}
+{"id": "c08", "answerable": true, "values": [["Wednesday"]]}
+{"id": "c09", "answerable": true, "values": [1392]}
+{"id": "c10", "answerable": true, "values": [9.53111111111111]}
+{"id": "c11", "answerable": true, "values": [[["Illegal Parking", "BROOKLYN"], ["Noise - Residential", "BROOKLYN"], ["HEAT/HOT WATER", "BRONX"]]]}
+{"id": "c12", "answerable": true, "values": [["DPR"]]}
+{"id": "c13", "answerable": true, "values": [701]}
+{"id": "c14", "answerable": true, "values": [["2023-01-04"]]}
+{"id": "c15", "answerable": true, "values": [10]}
+{"id": "c16", "answerable": true, "values": [false]}
+{"id": "c17", "answerable": true, "values": [123]}
+{"id": "c18", "answerable": true, "values": [["APARTMENT ONLY", "ENTIRE BUILDING"]]}
+{"id": "c19", "answerable": true, "values": [["BROOKLYN"], ["BROOKLYN"], [10467]]}
+{"id": "c20", "answerable": true, "values": [9.53111111111111, 501.63990245858395, 500.31779385818083]}
+{"id": "c21", "answerable": false, "values": []}
+{"id": "c22", "answerable": false, "values": []}
+{"id": "c23", "answerable": false, "values": []}

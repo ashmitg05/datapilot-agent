@@ -1,0 +1,33 @@
+name: ci
+on: [push, pull_request]
+permissions: { contents: read }
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --frozen
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+      - run: uv run mypy app benchmark
+      - name: Build sandbox image (security tests run against it)
+        run: docker build -t datapilot-sandbox:latest ../sandbox
+      - name: Tests incl. sandbox security
+        run: uv run pytest -q
+      - name: Sandbox security tests must not be skipped
+        run: uv run pytest -q -m docker -rs | tee out.txt && ! grep -q SKIPPED out.txt
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
