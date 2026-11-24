@@ -75,15 +75,16 @@ because the free tier is free, not because cost wasn't measured.
 ![Pilot ablation success rate](backend/benchmark/results/20261124-002455/success.png)
 
 **2. Full question set:** 69 questions × 1 repeat, same model. Run `20261124-005158`.
-The daily quota ran out partway through config 2, so configs 3–5 have no results yet.
+Provider errors are free-tier quota failures, not agent failures. The daily quota ran out
+during self_correction, so verification has no results yet.
 
-| Config | Questions completed | Success % (completed) | Correct refusal % (unanswerable) |
-|---|---|---|---|
-| single_shot | 69 / 69 | 60.9 | 0.0 (0 of 8) |
-| loop_no_schema | 39 / 69 | 66.7 | 12.5 (1 of 8) |
-| loop_schema, self_correction, verification | 0 / 69 | pending | pending |
-
-On the 39 questions both configs finished, single_shot and loop_no_schema each got 26 right.
+| Config | Success % | Success % (excl. provider errors) | Provider errors % | Correct refusal % | Avg steps |
+|---|---|---|---|---|---|
+| single_shot | 60.9 | 60.9 | 0.0 | 0.0 | 1.0 |
+| loop_no_schema | 47.8 | 64.7 | 26.1 | 37.5 | 2.1 |
+| loop_schema | 79.7 | 80.9 | 1.4 | 12.5 | 3.4 |
+| self_correction | 82.6 | 95.0 | 13.0 | 62.5 | 3.1 |
+| verification | pending | pending | 100.0 | pending | pending |
 
 **3. Stronger model:** the verification config on `nvidia/nemotron-3-ultra-550b-a55b:free`
 (OpenRouter), same 10 pilot questions. Run `20261124-005425`. It scored 10 / 10, with 5.2

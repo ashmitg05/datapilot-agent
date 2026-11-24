@@ -1,71 +1,71 @@
 | Question | Category | Failed repeats | Reason | Trace ids |
 |---|---|---|---|---|
-| r01 | aggregation | 1 | no final answer | 8436a13f |
-| r02 | aggregation | 1 | no final answer | 9cf847b8 |
-| r03 | filtering | 1 | no final answer | 505ab586 |
-| r04 | aggregation | 1 | no final answer | e18de2d8 |
-| r05 | filtering | 1 | no final answer | d7017a30 |
-| r06 | aggregation | 1 | no final answer | 3b87bfb4 |
-| r07 | time comparison | 1 | no final answer | 647864ec |
-| r08 | time comparison | 1 | no final answer | ee7f9835 |
-| r09 | aggregation | 1 | no final answer | 259017bb |
-| r10 | aggregation | 1 | no final answer | 382eb873 |
-| r11 | multi-step reasoning | 1 | no final answer | 6d26dd65 |
-| r12 | time comparison | 1 | no final answer | 6cb82cc1 |
-| r13 | multi-step reasoning | 1 | no final answer | b0ed3bb3 |
-| r14 | time comparison | 1 | no final answer | a2f9bb3d |
-| r15 | filtering | 1 | no final answer | 8b3ebae2 |
-| r16 | aggregation | 1 | no final answer | 9756c605 |
-| r17 | multi-step reasoning | 1 | no final answer | 48b2bcbc |
-| r18 | ambiguous | 1 | no final answer | 6548b622 |
-| r19 | ambiguous | 1 | no final answer | 5d0f9a2e |
-| r20 | unanswerable | 1 | no final answer | a9cf691f |
-| r21 | unanswerable | 1 | no final answer | c2356c05 |
-| r22 | time comparison | 1 | no final answer | 27292304 |
-| r23 | ambiguous | 1 | no final answer | d8d570b0 |
-| b01 | aggregation | 1 | no final answer | 844455d6 |
-| b02 | aggregation | 1 | no final answer | 46517d5d |
-| b03 | aggregation | 1 | no final answer | 4a802360 |
-| b04 | filtering | 1 | no final answer | 9c0d6637 |
-| b05 | time comparison | 1 | no final answer | 27ff5626 |
-| b06 | time comparison | 1 | no final answer | 6ff07396 |
-| b07 | aggregation | 1 | no final answer | df31a1a6 |
-| b08 | filtering | 1 | no final answer | 7245dd8c |
-| b09 | aggregation | 1 | no final answer | 0479c250 |
-| b10 | filtering | 1 | no final answer | 504f1187 |
-| b11 | aggregation | 1 | no final answer | ece28351 |
-| b12 | multi-step reasoning | 1 | no final answer | f20961ab |
-| b13 | time comparison | 1 | no final answer | aeca4ef6 |
-| b14 | multi-step reasoning | 1 | no final answer | a0f77319 |
-| b15 | time comparison | 1 | no final answer | fcadffea |
-| b16 | aggregation | 1 | no final answer | 1bba147f |
-| b17 | multi-step reasoning | 1 | no final answer | 414017da |
-| b18 | multi-step reasoning | 1 | no final answer | 486e9e55 |
-| b19 | ambiguous | 1 | no final answer | ccc0eeb6 |
-| b20 | ambiguous | 1 | no final answer | 9d892976 |
-| b21 | unanswerable | 1 | no final answer | 2280506b |
-| b22 | unanswerable | 1 | no final answer | 8cb0120a |
-| b23 | unanswerable | 1 | no final answer | 81871869 |
-| c01 | aggregation | 1 | no final answer | 37c06b67 |
-| c02 | aggregation | 1 | no final answer | 4e669fcf |
-| c03 | aggregation | 1 | no final answer | e4819b87 |
-| c04 | filtering | 1 | no final answer | 9705a555 |
-| c05 | aggregation | 1 | no final answer | ba57a377 |
-| c06 | aggregation | 1 | no final answer | 75355576 |
-| c07 | filtering | 1 | no final answer | 25536c16 |
-| c08 | time comparison | 1 | no final answer | 8a12f446 |
-| c09 | filtering | 1 | no final answer | 14a710d1 |
-| c10 | multi-step reasoning | 1 | no final answer | f5f459d0 |
-| c11 | multi-step reasoning | 1 | no final answer | a45bccda |
-| c12 | multi-step reasoning | 1 | no final answer | ffee444a |
-| c13 | filtering | 1 | no final answer | 68f713fd |
-| c14 | time comparison | 1 | no final answer | c11ef0d2 |
-| c15 | time comparison | 1 | no final answer | 0d311a62 |
-| c16 | multi-step reasoning | 1 | no final answer | 8eabd7c2 |
-| c17 | filtering | 1 | no final answer | 0122a46e |
-| c18 | filtering | 1 | no final answer | cddf941b |
-| c19 | ambiguous | 1 | no final answer | 9dae5590 |
-| c20 | ambiguous | 1 | no final answer | a7aa7b4e |
-| c21 | unanswerable | 1 | no final answer | 68cc7caa |
-| c22 | unanswerable | 1 | no final answer | 6f7f70c6 |
-| c23 | unanswerable | 1 | no final answer | 86d635fd |
+| r01 | aggregation | 1 | no final answer | ccbd67b6 |
+| r02 | aggregation | 1 | no final answer | a79b5b5b |
+| r03 | filtering | 1 | no final answer | 65822364 |
+| r04 | aggregation | 1 | no final answer | 34741ad8 |
+| r05 | filtering | 1 | no final answer | d5d1feb5 |
+| r06 | aggregation | 1 | no final answer | d6e03d1f |
+| r07 | time comparison | 1 | no final answer | 6b6601e6 |
+| r08 | time comparison | 1 | no final answer | 378f4fb2 |
+| r09 | aggregation | 1 | no final answer | 4419f772 |
+| r10 | aggregation | 1 | no final answer | 6c506403 |
+| r11 | multi-step reasoning | 1 | no final answer | e7134dcc |
+| r12 | time comparison | 1 | no final answer | 164183c8 |
+| r13 | multi-step reasoning | 1 | no final answer | 2be25899 |
+| r14 | time comparison | 1 | no final answer | 0548dcbb |
+| r15 | filtering | 1 | no final answer | 232d3a14 |
+| r16 | aggregation | 1 | no final answer | 277a64a7 |
+| r17 | multi-step reasoning | 1 | no final answer | 5adc047f |
+| r18 | ambiguous | 1 | no final answer | d41650a0 |
+| r19 | ambiguous | 1 | no final answer | a846e06b |
+| r20 | unanswerable | 1 | no final answer | 1ce9cea5 |
+| r21 | unanswerable | 1 | no final answer | d3dd2ae8 |
+| r22 | time comparison | 1 | no final answer | 51a78f66 |
+| r23 | ambiguous | 1 | no final answer | da21afa5 |
+| b01 | aggregation | 1 | no final answer | fd1dd4dd |
+| b02 | aggregation | 1 | no final answer | ccd0ca39 |
+| b03 | aggregation | 1 | no final answer | fba3dc71 |
+| b04 | filtering | 1 | no final answer | 2b224230 |
+| b05 | time comparison | 1 | no final answer | c620c74a |
+| b06 | time comparison | 1 | no final answer | 743266dc |
+| b07 | aggregation | 1 | no final answer | b7ca247f |
+| b08 | filtering | 1 | no final answer | 37ce86cc |
+| b09 | aggregation | 1 | no final answer | 17a81925 |
+| b10 | filtering | 1 | no final answer | b5ded676 |
+| b11 | aggregation | 1 | no final answer | d26a822e |
+| b12 | multi-step reasoning | 1 | no final answer | 04cba476 |
+| b13 | time comparison | 1 | no final answer | e4ac5767 |
+| b14 | multi-step reasoning | 1 | no final answer | 356275ed |
+| b15 | time comparison | 1 | no final answer | 477bf3f1 |
+| b16 | aggregation | 1 | no final answer | 2474862d |
+| b17 | multi-step reasoning | 1 | no final answer | 07a57f7f |
+| b18 | multi-step reasoning | 1 | no final answer | f4cfe3f1 |
+| b19 | ambiguous | 1 | no final answer | f026accc |
+| b20 | ambiguous | 1 | no final answer | 51cc0df4 |
+| b21 | unanswerable | 1 | no final answer | 07e063fe |
+| b22 | unanswerable | 1 | no final answer | 85274d00 |
+| b23 | unanswerable | 1 | no final answer | 2bac9646 |
+| c01 | aggregation | 1 | no final answer | df779e0a |
+| c02 | aggregation | 1 | no final answer | fc8b1178 |
+| c03 | aggregation | 1 | no final answer | fd917f12 |
+| c04 | filtering | 1 | no final answer | 2c4963df |
+| c05 | aggregation | 1 | no final answer | 2417b649 |
+| c06 | aggregation | 1 | no final answer | bda232e6 |
+| c07 | filtering | 1 | no final answer | 48ea202e |
+| c08 | time comparison | 1 | no final answer | d13b60ce |
+| c09 | filtering | 1 | no final answer | c25afae0 |
+| c10 | multi-step reasoning | 1 | no final answer | 318ac972 |
+| c11 | multi-step reasoning | 1 | no final answer | d1c4fd53 |
+| c12 | multi-step reasoning | 1 | no final answer | a87e0262 |
+| c13 | filtering | 1 | no final answer | 768316b8 |
+| c14 | time comparison | 1 | no final answer | 679ab126 |
+| c15 | time comparison | 1 | no final answer | 41b4c21e |
+| c16 | multi-step reasoning | 1 | no final answer | d7b4a589 |
+| c17 | filtering | 1 | no final answer | 96ee4bf2 |
+| c18 | filtering | 1 | no final answer | f55ce724 |
+| c19 | ambiguous | 1 | no final answer | 00874bd5 |
+| c20 | ambiguous | 1 | no final answer | 643e5749 |
+| c21 | unanswerable | 1 | no final answer | 2c9f95d5 |
+| c22 | unanswerable | 1 | no final answer | b0f6265c |
+| c23 | unanswerable | 1 | no final answer | 15bb5954 |
