@@ -80,8 +80,8 @@ gcloud run deploy datapilot-api --image $IMG/api --region $REGION \
   --service-account datapilot-api@$PROJECT.iam.gserviceaccount.com --allow-unauthenticated \
   --network sandbox-net --subnet sandbox-subnet --vpc-egress private-ranges-only \
   --set-secrets LLM_API_KEY=llm-api-key:latest \
-  --set-env-vars "LLM_PROVIDER=anthropic,LLM_MODEL=<model>,SANDBOX_MODE=http,SANDBOX_URL=$SANDBOX_URL,SAMPLES_ONLY=true,DAILY_QUESTION_LIMIT=15,COST_CAP_USD=0.25,CORS_ORIGINS=https://<your-app>.vercel.app,LLM_PRICE_IN_PER_MTOK=<from pricing page>,LLM_PRICE_OUT_PER_MTOK=<from pricing page>" \
-  --cpu 1 --memory 1Gi --max-instances 2 --timeout 300
+  --set-env-vars "LLM_PROVIDER=anthropic,LLM_MODEL=<model>,SANDBOX_MODE=http,SANDBOX_URL=$SANDBOX_URL,SAMPLES_ONLY=true,DAILY_QUESTION_LIMIT=15,GLOBAL_DAILY_QUESTION_LIMIT=300,DAILY_BUDGET_USD=5,COST_CAP_USD=0.25,CORS_ORIGINS=https://<your-app>.vercel.app,LLM_PRICE_IN_PER_MTOK=<from pricing page>,LLM_PRICE_OUT_PER_MTOK=<from pricing page>" \
+  --cpu 1 --memory 1Gi --max-instances 1 --timeout 300
 
 # 6. Verify that the sandbox has no internet. The run_python step must fail with a URLError:
 #    ask the demo "use python to fetch http://example.com".

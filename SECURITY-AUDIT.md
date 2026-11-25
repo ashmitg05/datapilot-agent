@@ -41,7 +41,11 @@ Fix: run the child as a second uid (`preexec_fn` → `os.setgid/os.setuid(1001)`
 server started as root only long enough to drop), or `prctl(PR_SET_DUMPABLE, 0)` in the server
 plus `PR_SET_NO_NEW_PRIVS` in the child.
 
-### NV-3 Per-instance, per-IP rate limit
+### NV-3 Per-instance, per-IP rate limit — FIXED in source
+IPv6 clients are counted per `/64`; a global daily question cap and a `DAILY_BUDGET_USD`
+spend cap cover all clients; the API is pinned to `--max-instances 1` so the in-memory
+counters are global. Tests: `test_ipv6_rotation_shares_one_quota`, `test_global_cap_and_budget`.
+
 `RateLimiter` is in memory and keyed on one IP. With `--max-instances 2` and IPv6 address
 rotation, one actor can exceed `DAILY_QUESTION_LIMIT` and spend LLM budget. `COST_CAP_USD`
 bounds each question, not the total. Already noted with a `ponytail:` comment.

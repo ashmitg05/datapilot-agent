@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import ipaddress
 import json
 import os
 import queue
@@ -36,29 +37,63 @@ UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", BACKEND / "uploads"))
 SAMPLES_ONLY = os.environ.get("SAMPLES_ONLY", "false").lower() == "true"
 MAX_UPLOAD_BYTES = int(float(os.environ.get("MAX_UPLOAD_MB", "10")) * 1024 * 1024)
 DAILY_LIMIT = int(os.environ.get("DAILY_QUESTION_LIMIT", "15"))
+GLOBAL_DAILY_LIMIT = int(os.environ.get("GLOBAL_DAILY_QUESTION_LIMIT", "300"))
+DAILY_BUDGET_USD = float(os.environ.get("DAILY_BUDGET_USD", "5"))
 COST_CAP_USD = float(os.environ.get("COST_CAP_USD", "0.25"))
 UPLOAD_TTL_S = 24 * 3600
 MAX_COLUMNS = 200
 _ID = re.compile(r"^[a-z0-9_-]{1,64}$")
 
 
-# ponytail: in-memory per-instance counter. Cloud Run may run several instances, so the real
-# limit is DAILY_LIMIT x instances; move to Redis/Postgres if that matters.
+# ponytail: in-memory, per instance. DEPLOY.md pins the API to --max-instances 1 so these are
+# real global caps; move the counters to Redis/Firestore before scaling out.
 class RateLimiter:
-    def __init__(self, limit: int) -> None:
-        self.limit = limit
-        self._counts: dict[tuple[str, dt.date], int] = defaultdict(int)
+    """Per-client daily questions, plus a global daily question cap and spend budget, so
+    rotating IPs can't run up the LLM bill past DAILY_BUDGET_USD."""
+
+    def __init__(
+        self, limit: int, total: int = GLOBAL_DAILY_LIMIT, budget_usd: float = DAILY_BUDGET_USD
+    ) -> None:
+        self.limit, self.total, self.budget_usd = limit, total, budget_usd
+        self._counts: dict[str, int] = defaultdict(int)
+        self._spent = 0.0
+        self._day = dt.date.today()
         self._lock = threading.Lock()
 
-    def hit(self, key: str) -> bool:
-        today = dt.date.today()
+    def _roll(self) -> None:
+        if (today := dt.date.today()) != self._day:
+            self._day, self._counts, self._spent = today, defaultdict(int), 0.0
+
+    def hit(self, key: str) -> str | None:
+        """Count one question. Returns None if allowed, else the reason it was refused."""
         with self._lock:
-            for k in [k for k in self._counts if k[1] != today]:
-                del self._counts[k]
-            if self._counts[(key, today)] >= self.limit:
-                return False
-            self._counts[(key, today)] += 1
-            return True
+            self._roll()
+            if self._spent >= self.budget_usd:
+                return "The demo's daily budget is used up. Try again tomorrow."
+            if sum(self._counts.values()) >= self.total:
+                return "The demo's daily question limit is reached. Try again tomorrow."
+            if self._counts[key] >= self.limit:
+                return f"Daily limit of {self.limit} questions reached."
+            self._counts[key] += 1
+            return None
+
+    def spend(self, usd: float) -> None:
+        with self._lock:
+            self._roll()
+            self._spent += usd
+
+
+def client_key(ip: str) -> str:
+    """One IPv6 user usually holds a whole /64, so count the /64, not the address."""
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip
+    if isinstance(addr, ipaddress.IPv6Address):
+        if addr.ipv4_mapped:
+            return str(addr.ipv4_mapped)
+        return str(ipaddress.ip_network(f"{addr}/64", strict=False))
+    return str(addr)
 
 
 def cleanup_uploads(now: float | None = None) -> int:
@@ -206,8 +241,8 @@ def ask(
     store: TraceStore = Depends(get_store),  # noqa: B008
 ) -> StreamingResponse:
     path = dataset_dir(body.dataset_id)
-    if not limiter.hit(client_ip(request)):
-        raise HTTPException(429, f"Daily limit of {DAILY_LIMIT} questions reached.")
+    if refused := limiter.hit(client_key(client_ip(request))):
+        raise HTTPException(429, refused)
     executor = executor_from_env()
     config = AgentConfig(
         verification=body.verification,
@@ -222,6 +257,7 @@ def ask(
             db = Database(path)
             state = run_agent(body.question, llm, ToolContext(db, executor), config,
                               Pricing.from_env(), _emitter(events))  # fmt: skip
+            limiter.spend(state.cost_usd)
             trace_id = store.save(state, body.dataset_id, llm.model, config)
             events.put({"type": "trace", "trace_id": trace_id})
         except Exception as e:  # noqa: BLE001 - surface provider errors to the client

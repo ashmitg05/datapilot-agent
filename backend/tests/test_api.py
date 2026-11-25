@@ -145,3 +145,28 @@ def test_rate_limit_ignores_spoofed_forwarded_for(client: TestClient) -> None:
         for i in range(4)
     ]
     assert codes == [200, 200, 200, 429]
+
+
+def test_ipv6_rotation_shares_one_quota(client: TestClient) -> None:
+    codes = [
+        client.post("/ask", json={"dataset_id": "demo", "question": "Top region?"},
+                    headers={"X-Forwarded-For": f"2001:db8:1:2::{i:x}"}).status_code
+        for i in range(4)
+    ]  # fmt: skip
+    assert codes == [200, 200, 200, 429]
+
+
+def test_global_cap_and_budget() -> None:
+    lim = main.RateLimiter(10, total=2, budget_usd=1.0)
+    assert lim.hit("a") is None and lim.hit("b") is None
+    assert "question limit" in (lim.hit("c") or "")
+    lim = main.RateLimiter(10, total=99, budget_usd=1.0)
+    assert lim.hit("a") is None
+    lim.spend(1.5)
+    assert "budget" in (lim.hit("b") or "")
+
+
+def test_client_key() -> None:
+    assert main.client_key("2001:db8::1") == main.client_key("2001:db8::ffff") == "2001:db8::/64"
+    assert main.client_key("::ffff:203.0.113.7") == "203.0.113.7"
+    assert main.client_key("203.0.113.7") == "203.0.113.7"
