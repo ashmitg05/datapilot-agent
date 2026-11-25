@@ -72,8 +72,8 @@ export default function HowItWorks() {
         )}
         {summary && (
           <p className="text-sm text-zinc-500">
-            Pilot ablation: 10 retail questions × 5 configs, gemini-3.5-flash-lite, SQL-only,
-            1 repeat. The full 69-question run is in progress; see the README for details.
+            Ablation: 69 questions over 3 datasets × 5 configs, gemini-3.5-flash-lite,
+            SQL-only, 1 repeat. Run 20261124-005158; see the README for details.
           </p>
         )}
         {summary && (
