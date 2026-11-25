@@ -283,3 +283,44 @@ def test_server_fails_closed_without_isolation() -> None:
     no_admin = SERVER_DOCKER[: i - 1] + SERVER_DOCKER[i + 1 :]
     r = _server_job("print('RAN')", docker=no_admin)
     assert not r.ok and "RAN" not in r.output
+
+
+_KILLER_POC = r"""
+import sys
+sys.path.insert(0, "/app")
+import server
+killer = '''
+import os, time
+end = time.time() + 6
+while time.time() < end:
+    try:
+        os.kill(-1, 9)
+    except OSError:
+        pass
+'''
+attacker = (
+    "import subprocess, sys\n"
+    f"subprocess.Popen([sys.executable, '-c', {killer!r}], start_new_session=True,"
+    " stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+)
+server.run_job(attacker, {})
+print("LEFT", len(server._job_pids()))
+"""
+
+
+def test_server_scrub_survives_job_that_kills_cleaner() -> None:
+    """Regression: a detached job looping kill(-1) must not outlive scrub()."""
+    p = subprocess.run([*SERVER_DOCKER, "-"], input=_KILLER_POC, capture_output=True,
+                       text=True, timeout=90)  # fmt: skip
+    assert p.returncode == 0, p.stderr[-500:]
+    assert "LEFT 0" in p.stdout
+
+
+def test_server_output_cap() -> None:
+    r = _server_job("import os\nwhile True: os.write(1, b'A' * 65536)")
+    assert not r.ok
+
+
+def test_docker_output_cap(sandbox: DockerExecutor, data_dir: Path) -> None:
+    r = sandbox.run("import os\nwhile True: os.write(1, b'A' * 65536)", data_dir)
+    assert not r.ok and "Output limit" in (r.error or "")

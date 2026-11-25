@@ -73,7 +73,7 @@ def run_one(
             state.cost_usd = pricing.cost(state.input_tokens, state.output_tokens)
         else:
             state = run_agent(q["question"], llm, ctx, config, pricing)
-        crash = None
+        crash = state.crash
     except Exception as e:  # noqa: BLE001 - provider errors are recorded, not fatal
         state, crash = AgentState(question=q["question"], status="crashed"), repr(e)
     state.elapsed_s = time.monotonic() - t0

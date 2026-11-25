@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import functools
 import ipaddress
 import json
 import os
@@ -41,6 +42,8 @@ GLOBAL_DAILY_LIMIT = int(os.environ.get("GLOBAL_DAILY_QUESTION_LIMIT", "300"))
 DAILY_BUDGET_USD = float(os.environ.get("DAILY_BUDGET_USD", "5"))
 COST_CAP_USD = float(os.environ.get("COST_CAP_USD", "0.25"))
 UPLOAD_TTL_S = 24 * 3600
+DAILY_UPLOAD_LIMIT = int(os.environ.get("DAILY_UPLOAD_LIMIT", "10"))
+MAX_UPLOAD_DIR_BYTES = int(float(os.environ.get("MAX_UPLOAD_DIR_MB", "500")) * 1024 * 1024)
 MAX_COLUMNS = 200
 _ID = re.compile(r"^[a-z0-9_-]{1,64}$")
 
@@ -64,23 +67,26 @@ class RateLimiter:
         if (today := dt.date.today()) != self._day:
             self._day, self._counts, self._spent = today, defaultdict(int), 0.0
 
-    def hit(self, key: str) -> str | None:
-        """Count one question. Returns None if allowed, else the reason it was refused."""
+    def hit(self, key: str, reserve_usd: float = 0.0) -> str | None:
+        """Count one question and reserve its worst-case cost up front, so concurrent runs
+        cannot all pass a stale budget check. Returns None if allowed, else the reason."""
         with self._lock:
             self._roll()
-            if self._spent >= self.budget_usd:
+            if self._spent + reserve_usd > self.budget_usd or self._spent >= self.budget_usd:
                 return "The demo's daily budget is used up. Try again tomorrow."
             if sum(self._counts.values()) >= self.total:
                 return "The demo's daily question limit is reached. Try again tomorrow."
             if self._counts[key] >= self.limit:
                 return f"Daily limit of {self.limit} questions reached."
             self._counts[key] += 1
+            self._spent += reserve_usd
             return None
 
-    def spend(self, usd: float) -> None:
+    def spend(self, usd: float, reserved_usd: float = 0.0) -> None:
+        """Settle a run: replace its reservation with the actual cost."""
         with self._lock:
             self._roll()
-            self._spent += usd
+            self._spent += usd - reserved_usd
 
 
 def client_key(ip: str) -> str:
@@ -106,15 +112,26 @@ def cleanup_uploads(now: float | None = None) -> int:
     return removed
 
 
+def purge_traces() -> int:
+    """Traces copy rows from uploads, so they expire with the upload (24 h promise)."""
+    return get_store().purge(dataset_prefix="upload-", older_than_s=UPLOAD_TTL_S)
+
+
+def _upload_dir_bytes() -> int:
+    return sum(f.stat().st_size for f in UPLOAD_DIR.glob("*/data.csv") if f.is_file())
+
+
 def _cleanup_loop(stop: threading.Event) -> None:
     while not stop.wait(3600):
         cleanup_uploads()
+        purge_traces()
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     cleanup_uploads()
+    purge_traces()
     stop = threading.Event()
     threading.Thread(target=_cleanup_loop, args=(stop,), daemon=True).start()
     yield
@@ -129,6 +146,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 limiter = RateLimiter(DAILY_LIMIT)
+# Uploads cost disk, not LLM spend: per-client daily count here, total bytes via MAX_UPLOAD_DIR_MB.
+upload_limiter = RateLimiter(DAILY_UPLOAD_LIMIT, total=1000, budget_usd=float("inf"))
 _store: TraceStore | None = None
 
 
@@ -178,8 +197,14 @@ def health() -> dict[str, Any]:
 
 @app.get("/datasets/samples")
 def samples() -> list[dict[str, Any]]:
+    return _samples(str(SAMPLES_DIR))
+
+
+@functools.cache
+def _samples(samples_dir: str) -> list[dict[str, Any]]:
+    """Sample data is baked into the image, so load it once, not on every anonymous GET."""
     out = []
-    for d in sorted(p for p in SAMPLES_DIR.glob("*") if p.is_dir() and any(p.glob("*.csv"))):
+    for d in sorted(p for p in Path(samples_dir).glob("*") if p.is_dir() and any(p.glob("*.csv"))):
         db = Database(d)
         try:
             out.append({"id": d.name, "tables": sorted(db.tables), "schema": _schema(db)})
@@ -189,9 +214,11 @@ def samples() -> list[dict[str, Any]]:
 
 
 @app.post("/datasets")
-async def upload(file: UploadFile) -> dict[str, Any]:
+async def upload(file: UploadFile, request: Request) -> dict[str, Any]:
     if SAMPLES_ONLY:
         raise HTTPException(403, "Uploads are disabled on this demo. Pick a sample dataset.")
+    if refused := upload_limiter.hit(client_key(client_ip(request))):
+        raise HTTPException(429, refused.replace("questions", "uploads"))
     if not (file.filename or "").lower().endswith(".csv"):
         raise HTTPException(400, "Only .csv files are accepted.")
     data = await file.read(MAX_UPLOAD_BYTES + 1)
@@ -204,6 +231,8 @@ async def upload(file: UploadFile) -> dict[str, Any]:
     if header.count("\n") < 1:
         raise HTTPException(400, "CSV needs a header row and at least one data row.")
 
+    if _upload_dir_bytes() + len(data) > MAX_UPLOAD_DIR_BYTES:
+        raise HTTPException(507, "Upload storage is full. Try again later.")
     uid = uuid.uuid4().hex
     target = UPLOAD_DIR / uid
     target.mkdir(parents=True)
@@ -241,7 +270,7 @@ def ask(
     store: TraceStore = Depends(get_store),  # noqa: B008
 ) -> StreamingResponse:
     path = dataset_dir(body.dataset_id)
-    if refused := limiter.hit(client_key(client_ip(request))):
+    if refused := limiter.hit(client_key(client_ip(request)), reserve_usd=COST_CAP_USD):
         raise HTTPException(429, refused)
     executor = executor_from_env()
     config = AgentConfig(
@@ -253,16 +282,18 @@ def ask(
 
     def work() -> None:
         db: Database | None = None
+        cost = 0.0
         try:
             db = Database(path)
             state = run_agent(body.question, llm, ToolContext(db, executor), config,
                               Pricing.from_env(), _emitter(events))  # fmt: skip
-            limiter.spend(state.cost_usd)
+            cost = state.cost_usd
             trace_id = store.save(state, body.dataset_id, llm.model, config)
             events.put({"type": "trace", "trace_id": trace_id})
         except Exception as e:  # noqa: BLE001 - surface provider errors to the client
             events.put({"type": "error", "message": str(e)[:300]})
         finally:
+            limiter.spend(cost, reserved_usd=COST_CAP_USD)  # always settle the reservation
             if db is not None:
                 db.close()
             events.put(None)

@@ -1,72 +1,40 @@
-# Security audit — DataPilot (`c7c3b77`, quick profile)
+# Security audit — DataPilot
 
-Scope: sandbox (local Docker + Cloud Run service), SQL guard, API (rate limit, uploads,
-traces), secrets, CI, `DEPLOY.md`. Source review only; no deployed endpoint was probed.
-Quick profile = partial coverage. No prior audit ledger.
+## Full audit (security-audit skill, standard profile, source ref `740c203`)
 
-## Confirmed
+Done with the full six-phase workflow:
+- 4 reconnaissance agents.
+- 17 hunters over 4 waves, with 5 coverage critics (the final clean pass found nothing missing).
+- 7 independent candidate verifiers and 7 final-record verifiers, 40 agents in total.
+- 22 coverage units, with both skill validators passing.
 
-None at medium or above. Local Docker sandbox security tests (26) and SQL guard tests pass
-and cover network, filesystem, fork bomb, memory, cross-job leak and SQL file/extension access.
+All checks were source-only: no target code was run during the audit.
 
-## Needs validation (deployment facts not in source; no severity)
+**Result:** no confirmed vulnerabilities. Seven leads needed runtime or deployment facts to settle. All seven are now fixed in source, each with a regression test:
 
-### NV-1 Cloud Run sandbox: metadata server and DNS still reachable — FIXED in source
-`run_job` now puts each job in an empty netns (`unshare(CLONE_NEWNET)`), failing closed.
-Tests: `test_server_job_has_no_network`, `test_server_fails_closed_without_isolation`.
-Still to validate: that Cloud Run gen2 allows `unshare` for root (see DEPLOY.md check).
+| # | Lead | Fix | Test |
+|---|---|---|---|
+| 1 | Sandbox `scrub()` ran its kill helper as the job uid, so a detached job could kill it and survive into the next job | The root server scans `/proc` and kills every uid-1000 process itself, repeating until none are left, and fails closed if any survive. It also empties `/dev/shm` and `/var/tmp`. | `test_server_scrub_survives_job_that_kills_cleaner` |
+| 2 | The daily budget was checked at admission but charged only after a successful run | Each question reserves `COST_CAP_USD` at admission, and the reservation is always settled in `finally`. `run_agent` now catches provider errors and keeps their cost. | `test_budget_reserved_at_admission`, `test_provider_error_keeps_cost` |
+| 2b | A `final_answer` over 4000 chars was truncated into invalid JSON and crashed the run | The answer is taken from the validated tool args, not the truncated output. | `test_long_final_answer_is_not_truncated_into_bad_json` |
+| 3 | `max_steps` was checked per LLM round, not per tool call | The step budget is checked before every tool call. | `test_max_steps_counts_each_parallel_call` |
+| 4 | Job stdout was buffered with no limit in the API process (docker mode) and the sandbox server | Both pipes are read with a 1 MB cap, and the job is killed past it. | `test_docker_output_cap`, `test_server_output_cap` |
+| 5 | Anonymous uploads had no rate limit or total disk cap | `DAILY_UPLOAD_LIMIT` per client and `MAX_UPLOAD_DIR_MB` total, returning 429 and 507. | `test_upload_quota_and_storage_cap` |
+| 6 | `GET /datasets/samples` re-ingested about 55 MB of CSV per request | Computed once per process (`functools.cache`). | `test_samples_computed_once` |
+| 7 | Traces kept upload-derived rows forever, despite the 24 h deletion promise | Traces for `upload-*` datasets are purged after 24 h at startup and hourly. | `test_upload_traces_expire` |
 
-`DEPLOY.md` removes internet egress with a no-NAT VPC. The Cloud Run metadata server
-(`169.254.169.254`) is not routed through the VPC, so job code can likely:
-- fetch an ID/access token for `datapilot-sandbox` SA (no roles, so low value), and
-- resolve arbitrary hostnames through the platform resolver, a DNS exfil channel for
-  uploaded data.
-Validate: deploy to a scratch project, run `socket.getaddrinfo("<random>.<your-domain>", 80)`
-in a job and check your authoritative DNS logs; `curl -H Metadata-Flavor:Google
-http://169.254.169.254/computeMetadata/v1/` from a job.
-Fix if confirmed: in `sandbox/server.py` `_limits()`, drop network for the child with
-`unshare(CLONE_NEWNET)` (gVisor supports it) or add a seccomp filter denying `socket()`
-except `AF_UNIX`; add a test that `getaddrinfo` fails.
+**Still to verify on a real deployment:**
+- Cloud Run gen2 must allow `unshare(CLONE_NEWNET)`. If it doesn't, jobs fail closed; see DEPLOY.md.
+- The per-instance in-memory counters require `--max-instances 1`.
+- The budget works only when `LLM_PRICE_*` is set.
 
-### NV-2 Cloud Run sandbox: job runs as the same uid as `server.py` — FIXED in source
-Server starts as root, sets `PR_SET_DUMPABLE=0`, and drops each job to uid 1000 with
-`NO_NEW_PRIVS`; `scrub()` kills only uid 1000. Test: `test_server_job_cannot_touch_server`.
+**Checked and clean:**
+- SQL guard (parser plus locked read-only DuckDB)
+- secrets (none in git, images or job env)
+- CI (read-only token, no secrets)
+- frontend (no HTML sinks, no credentialed CORS)
+- capability ids (uuid4)
+- the sandbox ID-token fallback (Cloud Run IAM still enforces)
+- config across deploy modes
 
-Child jobs share the server's uid. A job can signal or (if `ptrace` is allowed under gVisor)
-attach to the server process and survive `scrub()`, reading later jobs' `files`.
-Concurrency 1 limits this to the same instance, which is reused across users.
-Validate: in a scratch deploy, a job that runs `os.kill(os.getppid(), 0)` and attempts
-`ptrace(PTRACE_ATTACH, ppid)`.
-Fix: run the child as a second uid (`preexec_fn` → `os.setgid/os.setuid(1001)` with the
-server started as root only long enough to drop), or `prctl(PR_SET_DUMPABLE, 0)` in the server
-plus `PR_SET_NO_NEW_PRIVS` in the child.
-
-### NV-3 Per-instance, per-IP rate limit — FIXED in source
-IPv6 clients are counted per `/64`; a global daily question cap and a `DAILY_BUDGET_USD`
-spend cap cover all clients; the API is pinned to `--max-instances 1` so the in-memory
-counters are global. Tests: `test_ipv6_rotation_shares_one_quota`, `test_global_cap_and_budget`.
-
-`RateLimiter` is in memory and keyed on one IP. With `--max-instances 2` and IPv6 address
-rotation, one actor can exceed `DAILY_QUESTION_LIMIT` and spend LLM budget. `COST_CAP_USD`
-bounds each question, not the total. Already noted with a `ponytail:` comment.
-Validate: provider billing alert. Fix: global daily spend counter in Firestore/Redis,
-key IPv6 on `/64`.
-
-## Rejected (checked, no boundary crossed)
-
-- SQL guard bypass: even an unparsed function is blocked by DuckDB `read_only`,
-  `enable_external_access=false`, `lock_configuration=true`.
-- `/traces/{id}` IDOR: ids are `uuid4().hex` (122 bits), not enumerable.
-- Upload path traversal: files saved as `<uuid>/data.csv`; dataset ids match `^[a-z0-9_-]{1,64}$`.
-- Upload disk-fill: uploads disabled in the documented deploy (`SAMPLES_ONLY=true`).
-  Without it, there is no rate limit on `POST /datasets`; keep `SAMPLES_ONLY=true` public.
-- Secrets: no keys, `.env` or data CSVs tracked (`git grep` for Gemini/OpenRouter/Anthropic
-  key patterns clean); deploy uses Secret Manager.
-- CI: `permissions: contents: read`, no `pull_request_target`, no secrets used.
-- Frontend: no `dangerouslySetInnerHTML`/`innerHTML`.
-- Sandbox HTTP auth: `--no-allow-unauthenticated --ingress internal`, ID token from API SA.
-
-## Residual gaps
-
-Not covered: dependency CVE scan (no network fetch allowed), Next.js build config, LLM prompt
-injection from uploaded CSV cell text into tool calls (bounded by the same SQL/sandbox guards).
+**Not covered:** a dependency CVE scan (no offline database), and the live behaviour of any deployment.

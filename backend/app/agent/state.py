@@ -46,7 +46,8 @@ class AgentState:
     started: float = field(default_factory=time.monotonic)
     elapsed_s: float = 0.0
     verified: bool = False
-    status: str = "running"  # running | answered | max_steps | failed | cost_cap
+    status: str = "running"  # running | answered | max_steps | failed | cost_cap | crashed
+    crash: str | None = None  # repr of a provider/tool exception that ended the run
     final: dict[str, Any] | None = None
 
     def summary(self) -> dict[str, Any]:

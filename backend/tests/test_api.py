@@ -40,6 +40,8 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     monkeypatch.setattr(main, "UPLOAD_DIR", tmp_path / "uploads")
     monkeypatch.setattr(main, "SAMPLES_ONLY", False)
     monkeypatch.setattr(main, "limiter", main.RateLimiter(3))
+    monkeypatch.setattr(main, "upload_limiter", main.RateLimiter(3, total=99, budget_usd=1e9))
+    main._samples.cache_clear()
     store = TraceStore(tmp_path / "t.sqlite3")
     main.app.dependency_overrides[main.get_llm] = script
     main.app.dependency_overrides[main.get_store] = lambda: store
@@ -170,3 +172,43 @@ def test_client_key() -> None:
     assert main.client_key("2001:db8::1") == main.client_key("2001:db8::ffff") == "2001:db8::/64"
     assert main.client_key("::ffff:203.0.113.7") == "203.0.113.7"
     assert main.client_key("203.0.113.7") == "203.0.113.7"
+
+
+def test_budget_reserved_at_admission() -> None:
+    """Regression: concurrent runs must not all pass a stale budget check."""
+    lim = main.RateLimiter(99, total=99, budget_usd=1.0)
+    assert lim.hit("a", reserve_usd=0.4) is None and lim.hit("b", reserve_usd=0.4) is None
+    assert "budget" in (lim.hit("c", reserve_usd=0.4) or "")
+    lim.spend(0.1, reserved_usd=0.4)  # settle: actual cost replaces the reservation
+    assert lim.hit("c", reserve_usd=0.4) is None
+
+
+def test_upload_quota_and_storage_cap(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    csv = {"file": ("d.csv", b"a,b\n1,2\n", "text/csv")}
+    codes = [client.post("/datasets", files=csv).status_code for _ in range(4)]
+    assert codes == [200, 200, 200, 429]
+    monkeypatch.setattr(main, "upload_limiter", main.RateLimiter(99, total=99, budget_usd=1e9))
+    monkeypatch.setattr(main, "MAX_UPLOAD_DIR_BYTES", 1)
+    assert client.post("/datasets", files=csv).status_code == 507
+
+
+def test_samples_computed_once(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+    real = main.Database
+    monkeypatch.setattr(main, "Database", lambda d: calls.append(d) or real(d))
+    main._samples.cache_clear()
+    client.get("/datasets/samples")
+    client.get("/datasets/samples")
+    assert len(calls) == 1
+
+
+def test_upload_traces_expire(tmp_path: Path) -> None:
+    store = TraceStore(tmp_path / "t.sqlite3")
+    from app.agent.state import AgentConfig, AgentState
+
+    old = store.save(AgentState(question="q"), "upload-abc", "m", AgentConfig())
+    keep = store.save(AgentState(question="q"), "demo", "m", AgentConfig())
+    store._conn.execute("UPDATE traces SET created_at = datetime('now', '-2 days')")
+    store._conn.commit()
+    assert store.purge("upload-", 24 * 3600) == 1
+    assert store.get(old) is None and store.get(keep) is not None

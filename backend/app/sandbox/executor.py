@@ -6,9 +6,12 @@ in Phase 7 (private sandbox service) behind the same run() signature.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
+import threading
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -112,21 +115,64 @@ class DockerExecutor:
 
     def run(self, code: str, data_dir: Path) -> ToolResult:
         name = f"datapilot-sbx-{uuid.uuid4().hex[:12]}"
-        try:
-            proc = subprocess.run(
-                self.command(name, data_dir),
-                input=code,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                timeout=self.limits.timeout_s,
-            )
-        except subprocess.TimeoutExpired:
+        proc = subprocess.Popen(
+            self.command(name, data_dir),
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, encoding="utf-8",
+        )  # fmt: skip
+        out, err, timed_out, over = _capped(proc, code, self.limits.timeout_s, MAX_OUTPUT_BYTES)
+        if timed_out or over:
             subprocess.run(["docker", "kill", name], capture_output=True, check=False)
+        proc.wait()
+        if over:
+            return ToolResult.failure(f"Output limit exceeded ({MAX_OUTPUT_BYTES} bytes).")
+        if timed_out:
             return ToolResult.failure(
                 f"Execution timed out after {self.limits.timeout_s:.0f}s. Simplify the code."
             )
-        return parse_process(proc.returncode, proc.stdout, proc.stderr, self.limits)
+        return parse_process(proc.returncode, out, err, self.limits)
+
+
+MAX_OUTPUT_BYTES = 1024 * 1024
+
+
+def _capped(
+    proc: subprocess.Popen[str], code: str, timeout: float, cap: int
+) -> tuple[str, str, bool, bool]:
+    """Feed stdin and read both pipes, but stop at `cap` chars per stream or `timeout`, so
+    job output cannot grow the API process's memory. Returns (out, err, timed_out, over)."""
+    bufs: dict[str, list[str]] = {"out": [], "err": []}
+    over = threading.Event()
+
+    def pump(key: str, stream: Any) -> None:
+        size = 0
+        while chunk := stream.read(65536):
+            size += len(chunk)
+            if size > cap:
+                over.set()
+                return
+            bufs[key].append(chunk)
+
+    threads = [threading.Thread(target=pump, args=(k, st), daemon=True)
+               for k, st in (("out", proc.stdout), ("err", proc.stderr))]  # fmt: skip
+    for t in threads:
+        t.start()
+    with contextlib.suppress(BrokenPipeError, OSError):
+        assert proc.stdin is not None
+        proc.stdin.write(code)
+        proc.stdin.close()
+    deadline = time.monotonic() + timeout
+    timed_out = False
+    while any(t.is_alive() for t in threads) and not over.is_set():
+        if time.monotonic() > deadline:
+            timed_out = True
+            break
+        time.sleep(0.05)
+    if timed_out or over.is_set():
+        proc.kill()
+    for t in threads:
+        t.join(1)
+    return "".join(bufs["out"]), "".join(bufs["err"]), timed_out, over.is_set()
 
 
 def parse_process(returncode: int, stdout: str, stderr: str, limits: Limits) -> ToolResult:

@@ -6,7 +6,6 @@ until final_answer, max_steps, too many failed retries, or the cost cap.
 
 from __future__ import annotations
 
-import json
 import time
 from collections.abc import Callable
 from typing import Any
@@ -14,7 +13,7 @@ from typing import Any
 from app.agent.prompts import VERIFY_PROMPT, error_hint, system_prompt
 from app.agent.state import AgentConfig, AgentState, Step
 from app.llm import LLMClient, Pricing
-from app.tools import TOOLS, ToolContext, execute, tool_specs
+from app.tools import TOOLS, FinalAnswerInput, ToolContext, execute, tool_specs
 from app.tools.result import ToolResult
 
 Event = dict[str, Any]
@@ -55,107 +54,119 @@ def run_agent(
     consecutive_errors = 0
     pending_error = False  # an error not yet followed by a success
 
-    while state.status == "running":
-        if len(state.steps) >= config.max_steps:
-            state.status = "max_steps"
-            break
-        resp = llm.complete(system, state.messages, tools)
-        state.input_tokens += resp.input_tokens
-        state.output_tokens += resp.output_tokens
-        state.cost_usd = pricing.cost(state.input_tokens, state.output_tokens)
-        state.messages.append(
-            {
-                "role": "assistant",
-                "text": resp.text,
-                "tool_calls": [
-                    {"id": c.id, "name": c.name, "args": c.args, "extra": c.extra}
-                    for c in resp.tool_calls
-                ],
-            }
-        )
-        if not resp.tool_calls:
-            # Model replied in prose; nudge it back to the protocol (counts as a step).
-            state.steps.append(
-                Step(
-                    len(state.steps),
-                    resp.text[:500],
-                    "(none)",
-                    {},
-                    False,
-                    "",
-                    "no tool call",
-                    0,
-                    resp.input_tokens,
-                    resp.output_tokens,
-                )  # fmt: skip
-            )
+    try:
+        while state.status == "running":
+            if len(state.steps) >= config.max_steps:
+                state.status = "max_steps"
+                break
+            resp = llm.complete(system, state.messages, tools)
+            state.input_tokens += resp.input_tokens
+            state.output_tokens += resp.output_tokens
+            state.cost_usd = pricing.cost(state.input_tokens, state.output_tokens)
             state.messages.append(
-                {"role": "user", "text": "Use the tools. Finish by calling final_answer."}
+                {
+                    "role": "assistant",
+                    "text": resp.text,
+                    "tool_calls": [
+                        {"id": c.id, "name": c.name, "args": c.args, "extra": c.extra}
+                        for c in resp.tool_calls
+                    ],
+                }
             )
-            continue
+            if not resp.tool_calls:
+                # Model replied in prose; nudge it back to the protocol (counts as a step).
+                state.steps.append(
+                    Step(
+                        len(state.steps),
+                        resp.text[:500],
+                        "(none)",
+                        {},
+                        False,
+                        "",
+                        "no tool call",
+                        0,
+                        resp.input_tokens,
+                        resp.output_tokens,
+                    )  # fmt: skip
+                )
+                state.messages.append(
+                    {"role": "user", "text": "Use the tools. Finish by calling final_answer."}
+                )
+                continue
 
-        results: list[dict[str, Any]] = []
-        tokens_split = len(resp.tool_calls)
-        for call in resp.tool_calls:
-            t0 = time.monotonic()
-            if call.name not in allowed:
-                result = ToolResult.failure(f"Tool '{call.name}' is not available.")
-            elif call.name == "final_answer" and config.verification and not state.verified:
-                state.verified = True
-                result = execute(ctx, call.name, call.args)
-                if result.ok:
-                    result = ToolResult.failure(VERIFY_PROMPT)
-            else:
-                result = execute(ctx, call.name, call.args)
-            step = Step(
-                index=len(state.steps),
-                thought=resp.text[:500],
-                tool=call.name,
-                input=call.args,
-                ok=result.ok,
-                output=result.output,
-                error=result.error,
-                duration_ms=int((time.monotonic() - t0) * 1000),
-                input_tokens=resp.input_tokens // tokens_split,
-                output_tokens=resp.output_tokens // tokens_split,
-                images=result.images,
-            )
-            state.steps.append(step)
-            emit({"type": "step", "step": step.__dict__})
-
-            is_verify_nudge = result.error == VERIFY_PROMPT
-            if result.ok:
-                if pending_error:
-                    state.recovered_errors += 1
-                    pending_error = False
-                consecutive_errors = 0
-                if call.name == "final_answer":
-                    state.final = json.loads(result.output)
-                    state.status = "answered"
-                content = _observation(result)
-            elif is_verify_nudge:
-                content = VERIFY_PROMPT
-            else:
-                state.errors += 1
-                pending_error = True
-                consecutive_errors += 1
-                if not config.self_correction:
-                    state.status = "failed"
-                    content = _observation(result)
-                elif consecutive_errors > config.max_retries:
-                    state.status = "failed"
-                    content = _observation(result)
+            results: list[dict[str, Any]] = []
+            tokens_split = len(resp.tool_calls)
+            for call in resp.tool_calls:
+                # Step budget is per tool call: one response can hold many calls. The cost cap
+                # stays per round, since only LLM calls cost money.
+                if state.status != "running":
+                    break
+                if len(state.steps) >= config.max_steps:
+                    state.status = "max_steps"
+                    break
+                t0 = time.monotonic()
+                if call.name not in allowed:
+                    result = ToolResult.failure(f"Tool '{call.name}' is not available.")
+                elif call.name == "final_answer" and config.verification and not state.verified:
+                    state.verified = True
+                    result = execute(ctx, call.name, call.args)
+                    if result.ok:
+                        result = ToolResult.failure(VERIFY_PROMPT)
                 else:
-                    content = error_hint(
-                        _observation(result), consecutive_errors, config.max_retries
-                    )
-            results.append({"id": call.id, "content": content, "is_error": not result.ok})
-        state.messages.append({"role": "tool", "results": results})
+                    result = execute(ctx, call.name, call.args)
+                step = Step(
+                    index=len(state.steps),
+                    thought=resp.text[:500],
+                    tool=call.name,
+                    input=call.args,
+                    ok=result.ok,
+                    output=result.output,
+                    error=result.error,
+                    duration_ms=int((time.monotonic() - t0) * 1000),
+                    input_tokens=resp.input_tokens // tokens_split,
+                    output_tokens=resp.output_tokens // tokens_split,
+                    images=result.images,
+                )
+                state.steps.append(step)
+                emit({"type": "step", "step": step.__dict__})
 
-        if config.cost_cap_usd is not None and state.cost_usd > config.cost_cap_usd:
-            if state.status == "running":
-                state.status = "cost_cap"
+                is_verify_nudge = result.error == VERIFY_PROMPT
+                if result.ok:
+                    if pending_error:
+                        state.recovered_errors += 1
+                        pending_error = False
+                    consecutive_errors = 0
+                    if call.name == "final_answer":
+                        # From the validated args, not the (possibly truncated) tool output.
+                        state.final = FinalAnswerInput.model_validate(call.args).model_dump()
+                        state.status = "answered"
+                    content = _observation(result)
+                elif is_verify_nudge:
+                    content = VERIFY_PROMPT
+                else:
+                    state.errors += 1
+                    pending_error = True
+                    consecutive_errors += 1
+                    if not config.self_correction:
+                        state.status = "failed"
+                        content = _observation(result)
+                    elif consecutive_errors > config.max_retries:
+                        state.status = "failed"
+                        content = _observation(result)
+                    else:
+                        content = error_hint(
+                            _observation(result), consecutive_errors, config.max_retries
+                        )
+                results.append({"id": call.id, "content": content, "is_error": not result.ok})
+            state.messages.append({"role": "tool", "results": results})
 
+            if config.cost_cap_usd is not None and state.cost_usd > config.cost_cap_usd:
+                if state.status == "running":
+                    state.status = "cost_cap"
+
+    except Exception as e:  # noqa: BLE001 - keep cost and steps so spend is still recorded
+        state.status, state.crash = "crashed", repr(e)
+        emit({"type": "error", "message": str(e)[:300]})
     state.elapsed_s = time.monotonic() - state.started
     emit({"type": "done", "final": state.final, "summary": state.summary()})
     return state

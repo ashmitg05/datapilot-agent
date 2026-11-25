@@ -23,6 +23,8 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
+from typing import Any
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -60,6 +62,52 @@ def _limits() -> None:
     os.setsid()
 
 
+MAX_OUTPUT_BYTES = 1024 * 1024
+
+
+def capped_communicate(
+    p: subprocess.Popen[str], code: str, timeout: float, cap: int
+) -> tuple[str, str, bool]:
+    """communicate() that stops reading (and kills the job) past `cap` chars per stream, so
+    job output can never grow this process's memory without bound. Returns (out, err, killed)."""
+    import threading
+
+    bufs: dict[str, list[str]] = {"out": [], "err": []}
+    over = threading.Event()
+
+    def pump(name: str, stream: Any) -> None:
+        size = 0
+        while chunk := stream.read(65536):
+            size += len(chunk)
+            if size > cap:
+                over.set()
+                return
+            bufs[name].append(chunk)
+
+    threads = [threading.Thread(target=pump, args=(n, st), daemon=True)
+               for n, st in (("out", p.stdout), ("err", p.stderr))]  # fmt: skip
+    for t in threads:
+        t.start()
+    with contextlib.suppress(BrokenPipeError, OSError):
+        assert p.stdin is not None
+        p.stdin.write(code)
+        p.stdin.close()
+    deadline = time.monotonic() + timeout
+    killed = False
+    while any(t.is_alive() for t in threads):
+        if over.is_set() or time.monotonic() > deadline:
+            killed = True
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(p.pid, signal.SIGKILL)
+            break
+        time.sleep(0.05)
+    for t in threads:
+        t.join(1)
+    if over.is_set():
+        bufs["err"].append(f"\nOutput limit exceeded ({cap} bytes); job killed.")
+    return "".join(bufs["out"]), "".join(bufs["err"]), killed and not over.is_set()
+
+
 def run_job(code: str, files: dict[str, str]) -> dict[str, object]:
     job = Path(tempfile.mkdtemp(prefix="job-"))
     data, out = job / "data", job / "out"
@@ -88,10 +136,7 @@ def run_job(code: str, files: dict[str, str]) -> dict[str, object]:
                     "timed_out": False}  # fmt: skip
         timed_out = False
         try:
-            stdout, stderr = p.communicate(code, timeout=TIMEOUT_S)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            stdout, stderr = "", ""
+            stdout, stderr, timed_out = capped_communicate(p, code, TIMEOUT_S, MAX_OUTPUT_BYTES)
         finally:
             # The child leads its own session (setsid): kill every descendant, e.g. fork bombs.
             with contextlib.suppress(ProcessLookupError):
@@ -103,31 +148,45 @@ def run_job(code: str, files: dict[str, str]) -> dict[str, object]:
         scrub()
 
 
+def _job_pids() -> list[int]:
+    pids = []
+    for d in Path("/proc").iterdir():
+        if d.name.isdigit():
+            with contextlib.suppress(OSError):
+                if d.stat().st_uid == JOB_UID:
+                    pids.append(int(d.name))
+    return pids
+
+
 def scrub() -> None:
     """Leave nothing from a job behind for the next one (warm instances are reused).
 
-    A job can detach a process into a new session (escaping killpg) or drop files in /tmp, and
-    then read the next user's data. So: from a helper that has dropped to JOB_UID, kill every
-    process of that uid (kill(-1, ...) as root would hit the server too), reap, empty /tmp.
+    A job can detach a process into a new session (escaping killpg) or drop files in shared
+    temp dirs, then read the next user's data. The server (root) kills every JOB_UID process
+    itself, so job code cannot kill the cleaner, and repeats until none are left. Then it
+    empties every temp dir a job can write to.
     """
-    if (pid := os.fork()) == 0:
-        try:
-            os.setgid(JOB_UID)
-            os.setuid(JOB_UID)
-            os.kill(-1, signal.SIGKILL)
-        finally:
-            os._exit(0)
-    os.waitpid(pid, 0)
-    with contextlib.suppress(ChildProcessError):
-        while os.waitpid(-1, os.WNOHANG)[0]:
-            pass
-    tmp = Path(tempfile.gettempdir())
-    for entry in tmp.iterdir():
-        if entry.is_dir() and not entry.is_symlink():
-            shutil.rmtree(entry, ignore_errors=True)
-        else:
-            with contextlib.suppress(OSError):
-                entry.unlink()
+    for _ in range(50):
+        pids = _job_pids()
+        if not pids:
+            break
+        for pid in pids:
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.kill(pid, signal.SIGKILL)
+        with contextlib.suppress(ChildProcessError):
+            while os.waitpid(-1, os.WNOHANG)[0]:
+                pass
+    else:
+        raise SystemExit("scrub: JOB_UID processes survived; refusing to serve the next job")
+    for root in {Path(tempfile.gettempdir()), Path("/dev/shm"), Path("/var/tmp")}:  # noqa: S108
+        if not root.is_dir():
+            continue
+        for entry in root.iterdir():
+            if entry.is_dir() and not entry.is_symlink():
+                shutil.rmtree(entry, ignore_errors=True)
+            else:
+                with contextlib.suppress(OSError):
+                    entry.unlink()
 
 
 class Handler(BaseHTTPRequestHandler):

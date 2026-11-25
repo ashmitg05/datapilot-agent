@@ -147,3 +147,32 @@ def test_pacer_spaces_calls() -> None:
     for _ in range(4):
         pacer.wait()
     assert time.monotonic() - t0 >= 0.29
+
+
+def test_max_steps_counts_each_parallel_call(db: Database) -> None:
+    """Regression: one response with many tool calls must not run past max_steps."""
+    many = LLMResponse(
+        "", [ToolCall(f"c{i}", "run_sql", {"query": "SELECT 1"}) for i in range(25)], 10, 10
+    )
+    state = run_agent("q", ScriptedClient([many]), ToolContext(db), AgentConfig(max_steps=10))
+    assert state.status == "max_steps" and len(state.steps) == 10
+
+
+def test_long_final_answer_is_not_truncated_into_bad_json(db: Database) -> None:
+    final = {"answer": "x" * 5000, "value": "East", "evidence": ["e" * 3000]}
+    state = run_agent("q", ScriptedClient([call("final_answer", 0, **final)]), ToolContext(db))
+    assert state.status == "answered" and state.final["answer"] == "x" * 5000
+
+
+def test_provider_error_keeps_cost(db: Database) -> None:
+    """Regression: an exception after paid rounds must keep the cost so spend is recorded."""
+
+    class Flaky(ScriptedClient):
+        def complete(self, *a: object, **k: object) -> LLMResponse:
+            if not self._responses:
+                raise RuntimeError("provider down")
+            return self._responses.pop(0)
+
+    llm = Flaky([call("run_sql", 0, query="SELECT 1 FROM sales")])
+    state = run_agent("q", llm, ToolContext(db), pricing=Pricing(input_per_mtok=1e6))
+    assert state.status == "crashed" and state.crash and state.cost_usd > 0

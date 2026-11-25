@@ -79,6 +79,16 @@ class TraceStore:
             )
         return trace_id
 
+    def purge(self, dataset_prefix: str, older_than_s: int) -> int:
+        """Delete traces (and steps) for datasets with this id prefix older than the cutoff."""
+        where = "dataset LIKE ? AND created_at < datetime('now', ?)"
+        args = (dataset_prefix.replace("%", "") + "%", f"-{int(older_than_s)} seconds")
+        with self._lock, self._conn:
+            self._conn.execute(
+                f"DELETE FROM steps WHERE trace_id IN (SELECT id FROM traces WHERE {where})", args
+            )
+            return self._conn.execute(f"DELETE FROM traces WHERE {where}", args).rowcount
+
     def get(self, trace_id: str) -> dict[str, Any] | None:
         with self._lock:
             row = self._conn.execute("SELECT * FROM traces WHERE id = ?", (trace_id,)).fetchone()
