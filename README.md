@@ -54,10 +54,9 @@ There are 69 questions across 3 public datasets
 
 ### Ablation results
 
-**Status: partial.** All runs so far use Gemini's free tier, which allows 15 requests per
-minute and 500 requests per day for `gemini-3.5-flash-lite`. That's enough for the pilot
-and about half of one full repeat. The 3-repeat run on all 69 questions is still to do (see
-"Finishing the benchmark" below). Every number here comes from a saved run under
+**Status: 1 full repeat done.** All runs use Gemini's free tier (15 requests/minute, 500/day
+for `gemini-3.5-flash-lite`), so ± values are 0 with one repeat. A 3-repeat run needs a paid
+key or ~6 days of free quota (see "Finishing the benchmark" below). Every number here comes from a saved run under
 `backend/benchmark/results/` (`raw.jsonl`, `summary.md`, `traces.sqlite3`). Cost shows as $0
 because the free tier is free, not because cost wasn't measured.
 
@@ -91,7 +90,7 @@ resumed over three days (`--resume`).
 average steps and 13,183 average tokens, against flash-lite's 8 / 10 (both misses were
 provider errors). Ten questions is too few to rank the models.
 
-What the data shows so far:
+What the data shows (full set: single_shot 60.9% → loop_schema 81.2% → self_correction 94.2%):
 - **Schema inspection matters most.** On the pilot, adding `describe_schema` took the loop
   from 60% to 100%. Without it, the agent tried to discover the schema by querying
   `information_schema`, which the SQL guard blocks, and with self-correction off the first
