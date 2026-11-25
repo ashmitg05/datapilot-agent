@@ -4,13 +4,16 @@ Cloud Run cannot start Docker containers, so this image runs as its own private 
   - concurrency=1, so one job per instance; gVisor (Cloud Run gen2) isolates the instance
   - ingress internal + IAM auth, so only the API's service account can call it
   - egress forced through a VPC with no NAT, so no internet
-  - each job runs runner.py in a child process with rlimits, a clean env and a fresh temp dir
+  - each job runs runner.py in a child process with rlimits, a clean env and a fresh temp dir,
+    in its own empty network namespace (no metadata server, no DNS) and as JOB_UID, so it
+    cannot signal, ptrace or overwrite the server (which runs as root to set this up)
 
 POST /run  {"code": str, "files": {"name.csv": "csv text"}}
   -> {"returncode", "stdout", "stderr", "timed_out"}   (parsed by app.sandbox.executor)
 """
 
 import contextlib
+import ctypes
 import json
 import os
 import re
@@ -29,6 +32,24 @@ TIMEOUT_S = 15
 MEMORY_BYTES = 1024 * 1024 * 1024
 MAX_BODY = 12 * 1024 * 1024
 _NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}\.csv$")
+JOB_UID = 1000
+CLONE_NEWNET = 0x40000000
+PR_SET_NO_NEW_PRIVS = 38
+PR_SET_DUMPABLE = 4
+_libc = ctypes.CDLL(None, use_errno=True)
+
+
+def _isolate() -> None:
+    """Child side, before exec: empty netns, then drop to JOB_UID for good. Fails closed:
+    any error here aborts the exec, so the job never runs with network or root."""
+    if _libc.unshare(CLONE_NEWNET) != 0:
+        raise OSError(ctypes.get_errno(), "unshare(CLONE_NEWNET) failed")
+    _limits()
+    os.setgroups([])
+    os.setgid(JOB_UID)
+    os.setuid(JOB_UID)
+    if _libc.prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0:
+        raise OSError(ctypes.get_errno(), "prctl(NO_NEW_PRIVS) failed")
 
 
 def _limits() -> None:
@@ -44,6 +65,8 @@ def run_job(code: str, files: dict[str, str]) -> dict[str, object]:
     data, out = job / "data", job / "out"
     data.mkdir()
     out.mkdir()
+    os.chown(job, JOB_UID, JOB_UID)  # HOME/MPLCONFIGDIR; data/ stays root-owned 0555
+    os.chown(out, JOB_UID, JOB_UID)
     try:
         for name, text in files.items():
             if not _NAME.match(name):
@@ -54,11 +77,15 @@ def run_job(code: str, files: dict[str, str]) -> dict[str, object]:
         env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": str(job), "MPLCONFIGDIR": str(job),
                "DATA_DIR": str(data), "OUT_DIR": str(out), "PYTHONDONTWRITEBYTECODE": "1",
                "OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1", "MALLOC_ARENA_MAX": "2"}  # fmt: skip
-        p = subprocess.Popen(
-            [sys.executable, "-I", "/app/runner.py"],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-            env=env, cwd=job, preexec_fn=_limits,  # noqa: PLW1509 - rlimits need it
-        )  # fmt: skip
+        try:
+            p = subprocess.Popen(
+                [sys.executable, "-I", "/app/runner.py"],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                env=env, cwd=job, preexec_fn=_isolate,  # noqa: PLW1509 - netns/uid need it
+            )  # fmt: skip
+        except subprocess.SubprocessError:  # _isolate failed: never run the job unisolated
+            return {"returncode": 3, "stdout": "", "stderr": "sandbox isolation unavailable",
+                    "timed_out": False}  # fmt: skip
         timed_out = False
         try:
             stdout, stderr = p.communicate(code, timeout=TIMEOUT_S)
@@ -80,11 +107,17 @@ def scrub() -> None:
     """Leave nothing from a job behind for the next one (warm instances are reused).
 
     A job can detach a process into a new session (escaping killpg) or drop files in /tmp, and
-    then read the next user's data. So: kill every process this uid can signal (kill(-1, ...)
-    skips init and the caller), reap them, and empty the temp dir.
+    then read the next user's data. So: from a helper that has dropped to JOB_UID, kill every
+    process of that uid (kill(-1, ...) as root would hit the server too), reap, empty /tmp.
     """
-    with contextlib.suppress(ProcessLookupError):
-        os.kill(-1, signal.SIGKILL)
+    if (pid := os.fork()) == 0:
+        try:
+            os.setgid(JOB_UID)
+            os.setuid(JOB_UID)
+            os.kill(-1, signal.SIGKILL)
+        finally:
+            os._exit(0)
+    os.waitpid(pid, 0)
     with contextlib.suppress(ChildProcessError):
         while os.waitpid(-1, os.WNOHANG)[0]:
             pass
@@ -124,8 +157,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    if os.getuid() == 0:
-        raise SystemExit("refusing to run as root: scrub() kills every process of this user")
+    if os.getuid() != 0:
+        raise SystemExit("must start as root: jobs need a fresh netns and a dropped uid")
+    _libc.prctl(PR_SET_DUMPABLE, 0, 0, 0, 0)  # jobs can't read this process's memory
     # Single-threaded on purpose: one job at a time per instance (Cloud Run concurrency=1), so
     # scrub() never touches a concurrent job.
     HTTPServer(("0.0.0.0", int(os.environ.get("PORT", "8080"))), Handler).serve_forever()  # noqa: S104

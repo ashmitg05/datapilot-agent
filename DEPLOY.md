@@ -15,7 +15,7 @@ The options were:
 
 | Option | Pros | Cons |
 |---|---|---|
-| **Separate private Cloud Run sandbox service** (chosen) | Uses the same image and runner as local. gVisor isolates each instance. Concurrency 1 means one job per instance. No third party. | About 1–3 s cold start. Network isolation depends on VPC config rather than `--network none`. |
+| **Separate private Cloud Run sandbox service** (chosen) | Uses the same image and runner as local. gVisor isolates each instance. Concurrency 1 means one job per instance. No third party. | About 1–3 s cold start. Each job gets an empty network namespace; the no-NAT VPC is a second layer. |
 | E2B | Firecracker microVMs, nothing to operate | Third-party service, extra key and cost, less to explain |
 | SQL-only mode (`SANDBOX_MODE=none`) | Simplest and cheapest | No Python or custom charts |
 
@@ -30,6 +30,11 @@ How the sandbox service is locked down:
 - Each job runs in a child process with rlimits: 1 GiB address space, CPU, 64 processes, 32 MB
   file size. It gets a clean environment and a 15 s wall clock, and its whole process group is
   killed when it ends.
+- Each job runs in its own empty network namespace (no metadata server, no DNS) as uid 1000.
+  The server starts as root only to set that up, so a job can't signal, ptrace or overwrite it.
+  If the platform refuses `unshare(CLONE_NEWNET)`, every job fails with "sandbox isolation
+  unavailable" instead of running unisolated. **Check after deploy:** run one Python question;
+  if it fails that way, use `SANDBOX_MODE=none` until fixed.
 - Its own service account has no roles and holds no secrets.
 
 ## Steps

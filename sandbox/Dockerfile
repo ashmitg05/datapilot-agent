@@ -6,5 +6,6 @@ RUN pip install --no-cache-dir numpy==2.1.3 pandas==2.2.3 matplotlib==3.9.2 \
     && useradd --uid 1000 --no-create-home --shell /usr/sbin/nologin sandbox
 COPY runner.py server.py /app/
 ENV MPLCONFIGDIR=/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-USER 1000:1000
+# No USER: DockerExecutor passes --user 1000:1000; server.py starts as root and drops
+# each job to uid 1000 in its own netns.
 ENTRYPOINT ["python", "-I", "/app/runner.py"]

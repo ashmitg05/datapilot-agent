@@ -148,9 +148,17 @@ def test_cannot_escalate(sandbox: DockerExecutor, data_dir: Path) -> None:
 
 
 # --- Cloud Run backend: same attacks against sandbox/server.py's run_job (rlimits, no Docker
-# flags). Network isolation there comes from Cloud Run VPC egress, so it is tested with
-# --network none here and documented in the README.
-def _server_job(code: str, files: dict[str, str] | None = None) -> ToolResult:
+# flags). The server starts as root and puts each job in an empty netns as uid 1000, so these
+# containers get the default bridge network (internet) to prove the job itself can't reach it.
+SERVER_DOCKER = ["docker", "run", "--rm", "-i", "--user", "0", "--cap-drop", "ALL",
+                 "--cap-add", "SYS_ADMIN", "--cap-add", "SETUID", "--cap-add", "SETGID",
+                 "--cap-add", "CHOWN", "--cap-add", "KILL", "--cap-add", "DAC_OVERRIDE",
+                 "--entrypoint", "python", IMAGE]  # fmt: skip
+
+
+def _server_job(
+    code: str, files: dict[str, str] | None = None, docker: list[str] | None = None
+) -> ToolResult:
     import json
 
     script = (
@@ -158,8 +166,7 @@ def _server_job(code: str, files: dict[str, str] | None = None) -> ToolResult:
         "print(json.dumps(server.run_job(sys.stdin.read(), json.loads(sys.argv[1]))))"
     )
     p = subprocess.run(
-        ["docker", "run", "--rm", "-i", "--network", "none", "--entrypoint", "python", IMAGE,
-         "-c", script, json.dumps(files or {})],
+        [*(docker or SERVER_DOCKER), "-c", script, json.dumps(files or {})],
         input=code, capture_output=True, text=True, timeout=60,
     )  # fmt: skip
     return _parse(json.loads(p.stdout))
@@ -218,8 +225,61 @@ print(server.run_job("print(open('/tmp/stash.csv').read())", {})["stdout"])
 def test_server_no_cross_job_leak() -> None:
     """Regression: a detached process from one job must not read the next job's data."""
     p = subprocess.run(
-        ["docker", "run", "--rm", "-i", "--network", "none", "--entrypoint", "python", IMAGE, "-"],
+        [*SERVER_DOCKER, "-"],
         input=_LEAK_POC, capture_output=True, text=True, timeout=90,
     )  # fmt: skip
     assert p.returncode == 0, p.stderr[-500:]
     assert "VICTIM-123" not in p.stdout
+
+
+def test_server_job_has_no_network() -> None:
+    """Regression: VPC egress rules don't cover the metadata server or DNS; the netns does."""
+    code = """
+import socket
+for host, port in [("1.1.1.1", 53), ("169.254.169.254", 80)]:
+    s = socket.socket()
+    s.settimeout(3)
+    try:
+        s.connect((host, port))
+        print("CONNECTED", host)
+    except OSError:
+        pass
+try:
+    socket.getaddrinfo("example.com", 80)
+    print("RESOLVED")
+except OSError:
+    pass
+print("done")
+"""
+    r = _server_job(code)
+    assert r.ok and "done" in r.output
+    assert "CONNECTED" not in r.output and "RESOLVED" not in r.output
+
+
+def test_server_job_cannot_touch_server() -> None:
+    """Regression: the job runs as uid 1000, not the server's uid, so no signal/ptrace."""
+    code = """
+import os
+print("uid", os.getuid())
+try:
+    os.kill(1, 0)
+    print("CAN_SIGNAL")
+except PermissionError:
+    pass
+try:
+    open("/app/server.py", "a")
+    print("CAN_WRITE")
+except OSError:
+    pass
+"""
+    r = _server_job(code)
+    assert r.ok and "uid 1000" in r.output
+    assert "CAN_SIGNAL" not in r.output and "CAN_WRITE" not in r.output
+
+
+def test_server_fails_closed_without_isolation() -> None:
+    """No CAP_SYS_ADMIN means no netns: the job must not run at all."""
+    i = SERVER_DOCKER.index("SYS_ADMIN")
+    no_admin = SERVER_DOCKER[: i - 1] + SERVER_DOCKER[i + 1 :]
+    r = _server_job("print('RAN')", docker=no_admin)
+    assert not r.ok and "RAN" not in r.output
